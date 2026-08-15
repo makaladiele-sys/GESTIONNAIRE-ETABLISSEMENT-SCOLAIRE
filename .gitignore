@@ -1,0 +1,8 @@
+# Configuration locale (contient l'URL et la clé anon Supabase)
+js/config.js
+
+# Système
+.DS_Store
+Thumbs.db
+node_modules/
+*.log
