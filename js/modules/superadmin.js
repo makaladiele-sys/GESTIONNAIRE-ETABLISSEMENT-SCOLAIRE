@@ -2,6 +2,14 @@
 // Super Admin plateforme : gestion des établissements
 //
 // Rôles concernés : platform_admin
+//
+// Fonctionnalités :
+// - Affichage de tous les établissements
+// - Compteurs : total / attente / actifs / suspendus
+// - Activation d'un établissement
+// - Suspension d'un établissement
+// - Actualisation après chaque action
+// - Gestion détaillée des erreurs Supabase
 // ==========================================================================
 
 import { getSupabase } from "../supabaseClient.js";
@@ -9,14 +17,23 @@ import { toast, escapeHtml } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
 
+// --------------------------------------------------------------------------
+// Configuration
+// --------------------------------------------------------------------------
+
 const STATUS = {
   PENDING: "pending",
   ACTIVE: "active",
   SUSPENDED: "suspended",
 };
 
-// Empêche plusieurs refresh() concurrents de partir en parallèle et de
-// se marcher dessus (c'est la cause du 0 / 14 / 0 observé dans les logs).
+// --------------------------------------------------------------------------
+// Rafraîchir les établissements
+// --------------------------------------------------------------------------
+
+// Empêche plusieurs refresh() concurrents de partir en parallèle et de se
+// marcher dessus (cause du 0 / 14 / 0 observé quand auth.js déclenchait
+// plusieurs fois onAuthenticated()).
 let _refreshPromise = null;
 
 export async function refresh() {
@@ -66,6 +83,7 @@ async function _refreshInner() {
 
     if (error) {
       console.error("[SuperAdmin] Erreur Supabase :", error);
+
       body.innerHTML = `
         <tr>
           <td colspan="6" class="empty">
@@ -74,32 +92,133 @@ async function _refreshInner() {
           </td>
         </tr>
       `;
+
       if (stats) {
         stats.innerHTML = `
-          <div class="stat"><div><div class="label">Établissements</div><div class="value">—</div></div><div class="stat-icon">🏫</div></div>
-          <div class="stat"><div><div class="label">En attente</div><div class="value">—</div></div><div class="stat-icon">⏳</div></div>
-          <div class="stat"><div><div class="label">Actifs</div><div class="value">—</div></div><div class="stat-icon">✅</div></div>
-          <div class="stat"><div><div class="label">Suspendus</div><div class="value">—</div></div><div class="stat-icon">⛔</div></div>
+          <div class="stat">
+            <div>
+              <div class="label">Établissements</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">🏫</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">En attente</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">⏳</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">Actifs</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">✅</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">Suspendus</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">⛔</div>
+          </div>
         `;
       }
+
       return;
     }
 
     const rows = Array.isArray(data) ? data : [];
+
     console.log(`[SuperAdmin] ${rows.length} établissement(s) récupéré(s).`, rows);
+
+    // ----------------------------------------------------------------------
+    // Statistiques
+    // ----------------------------------------------------------------------
 
     const pending = rows.filter((s) => s.status === STATUS.PENDING).length;
     const active = rows.filter((s) => s.status === STATUS.ACTIVE).length;
     const suspended = rows.filter((s) => s.status === STATUS.SUSPENDED).length;
 
+    // ----------------------------------------------------------------------
+    // Affichage des statistiques
+    // ----------------------------------------------------------------------
+
     if (stats) {
       stats.innerHTML = `
-        <div class="stat"><div><div class="label">Établissements</div><div class="value">${rows.length}</div></div><div class="stat-icon">🏫</div></div>
-        <div class="stat"><div><div class="label">En attente</div><div class="value">${pending}</div></div><div class="stat-icon">⏳</div></div>
-        <div class="stat"><div><div class="label">Actifs</div><div class="value">${active}</div></div><div class="stat-icon">✅</div></div>
-        <div class="stat"><div><div class="label">Suspendus</div><div class="value">${suspended}</div></div><div class="stat-icon">⛔</div></div>
+        <div class="stat">
+          <div>
+            <div class="label">
+              Établissements
+            </div>
+
+            <div class="value">
+              ${rows.length}
+            </div>
+          </div>
+
+          <div class="stat-icon">
+            🏫
+          </div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">
+              En attente
+            </div>
+
+            <div class="value">
+              ${pending}
+            </div>
+          </div>
+
+          <div class="stat-icon">
+            ⏳
+          </div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">
+              Actifs
+            </div>
+
+            <div class="value">
+              ${active}
+            </div>
+          </div>
+
+          <div class="stat-icon">
+            ✅
+          </div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">
+              Suspendus
+            </div>
+
+            <div class="value">
+              ${suspended}
+            </div>
+          </div>
+
+          <div class="stat-icon">
+            ⛔
+          </div>
+        </div>
       `;
     }
+
+    // ----------------------------------------------------------------------
+    // Aucun établissement
+    // ----------------------------------------------------------------------
 
     if (!rows.length) {
       body.innerHTML = `
@@ -109,8 +228,13 @@ async function _refreshInner() {
           </td>
         </tr>
       `;
+
       return;
     }
+
+    // ----------------------------------------------------------------------
+    // Tableau
+    // ----------------------------------------------------------------------
 
     body.innerHTML = rows
       .map((school) => {
@@ -119,35 +243,88 @@ async function _refreshInner() {
           : "—";
 
         let statusBadge = "";
+
         if (school.status === STATUS.ACTIVE) {
-          statusBadge = `<span class="badge green">Actif</span>`;
+          statusBadge = `
+            <span class="badge green">
+              Actif
+            </span>
+          `;
         } else if (school.status === STATUS.SUSPENDED) {
-          statusBadge = `<span class="badge red">Suspendu</span>`;
+          statusBadge = `
+            <span class="badge red">
+              Suspendu
+            </span>
+          `;
         } else {
-          statusBadge = `<span class="badge orange">En attente</span>`;
+          statusBadge = `
+            <span class="badge orange">
+              En attente
+            </span>
+          `;
         }
 
         let action = "";
+
         if (school.status === STATUS.ACTIVE) {
-          action = `<button class="btn btn-light btn-sm" data-status="suspended" data-id="${escapeHtml(school.id)}">⛔ Suspendre</button>`;
+          action = `
+            <button
+              class="btn btn-light btn-sm"
+              data-status="suspended"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ⛔ Suspendre
+            </button>
+          `;
         } else {
-          action = `<button class="btn btn-primary btn-sm" data-status="active" data-id="${escapeHtml(school.id)}">✅ Activer</button>`;
+          action = `
+            <button
+              class="btn btn-primary btn-sm"
+              data-status="active"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ✅ Activer
+            </button>
+          `;
         }
 
         return `
           <tr>
-            <td><b>${escapeHtml(school.name || "—")}</b></td>
-            <td>${escapeHtml(school.email || "—")}</td>
-            <td>${escapeHtml(school.phone || "—")}</td>
-            <td>${created}</td>
-            <td>${statusBadge}</td>
-            <td>${action}</td>
+
+            <td>
+              <b>
+                ${escapeHtml(school.name || "—")}
+              </b>
+            </td>
+
+            <td>
+              ${escapeHtml(school.email || "—")}
+            </td>
+
+            <td>
+              ${escapeHtml(school.phone || "—")}
+            </td>
+
+            <td>
+              ${created}
+            </td>
+
+            <td>
+              ${statusBadge}
+            </td>
+
+            <td>
+              ${action}
+            </td>
+
           </tr>
         `;
       })
       .join("");
+
   } catch (err) {
     console.error("[SuperAdmin] Exception :", err);
+
     body.innerHTML = `
       <tr>
         <td colspan="6" class="empty">
@@ -159,22 +336,32 @@ async function _refreshInner() {
   }
 }
 
+// --------------------------------------------------------------------------
+// Changer le statut d'un établissement
+// --------------------------------------------------------------------------
+
 async function updateSchoolStatus(schoolId, newStatus) {
   if (!schoolId || !newStatus) {
     toast("Informations d'établissement invalides.");
     return;
   }
+
   if (![STATUS.ACTIVE, STATUS.SUSPENDED].includes(newStatus)) {
     toast("Statut non autorisé.");
     return;
   }
 
   const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
+
   const confirmation = window.confirm(`Voulez-vous vraiment ${actionLabel} cet établissement ?`);
-  if (!confirmation) return;
+
+  if (!confirmation) {
+    return;
+  }
 
   try {
     const sb = getSupabase();
+
     console.log("[SuperAdmin] Modification statut :", { schoolId, newStatus });
 
     const { data, error } = await sb
@@ -191,17 +378,28 @@ async function updateSchoolStatus(schoolId, newStatus) {
     }
 
     console.log("[SuperAdmin] Établissement modifié :", data);
-    toast(newStatus === STATUS.ACTIVE ? "✅ Établissement activé." : "⛔ Établissement suspendu.");
+
+    if (newStatus === STATUS.ACTIVE) {
+      toast("✅ Établissement activé.");
+    } else {
+      toast("⛔ Établissement suspendu.");
+    }
+
     await refresh();
+
   } catch (err) {
     console.error("[SuperAdmin] Exception UPDATE :", err);
+
     toast("Erreur : " + (err?.message || "Impossible de modifier l'établissement."));
   }
 }
 
-// Empêche mount() d'attacher deux fois les mêmes écouteurs si la vue
-// Super Admin est montée plusieurs fois (autre cause possible d'appels
-// multiples à refresh()).
+// --------------------------------------------------------------------------
+// Montage
+// --------------------------------------------------------------------------
+
+// Empêche mount() d'attacher deux fois les mêmes écouteurs si la vue Super
+// Admin est montée plusieurs fois.
 let _mounted = false;
 
 export function mount() {
@@ -209,11 +407,14 @@ export function mount() {
   _mounted = true;
 
   const body = el("superAdminBody");
+
   body?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-status]");
     if (!button) return;
+
     const schoolId = button.dataset.id;
     const newStatus = button.dataset.status;
+
     await updateSchoolStatus(schoolId, newStatus);
   });
 
