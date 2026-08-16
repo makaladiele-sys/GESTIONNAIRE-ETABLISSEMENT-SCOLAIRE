@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion — SAAS-TOUBA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #16233D;
+    --ink-soft: #1F304F;
+    --gold: #C9A227;
+    --gold-soft: #E4C666;
+    --chalk: #FFFFFF;
+    --sable: #F6F3EC;
+    --slate: #3A4553;
+    --baobab: #2F5233;
+    --danger: #B3402A;
+    --danger-soft: #F7E9E5;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--slate);
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    background: var(--sable);
+  }
+
+  /* ===== Left panel : brand ===== */
+  .brand-panel {
+    position: relative;
+    background: linear-gradient(160deg, var(--ink) 0%, var(--ink-soft) 100%);
+    color: var(--chalk);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px;
+    overflow: hidden;
+  }
+  .brand-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(600px 300px at 85% -10%, rgba(201,162,39,0.18), transparent 60%),
+      radial-gradient(500px 400px at -10% 110%, rgba(47,82,51,0.25), transparent 60%);
+    pointer-events: none;
+  }
+  .brand-mark { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+  .brand-seal {
+    width: 40px; height: 40px; border-radius: 50%; padding: 2.5px;
+    background: conic-gradient(from 180deg, var(--gold), var(--gold-soft), var(--gold));
+    display: grid; place-items: center; flex: none;
+  }
+  .brand-seal-inner {
+    width: 100%; height: 100%; border-radius: 50%; background: var(--ink);
+    display: grid; place-items: center;
+  }
+  .brand-seal-inner svg { width: 18px; height: 18px; color: var(--gold-soft); }
+  .brand-name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
+
+  .brand-copy { position: relative; z-index: 1; max-width: 420px; }
+  .brand-copy .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--gold-soft); margin-bottom: 16px;
+  }
+  .brand-copy h1 {
+    font-family: 'Fraunces', serif; font-weight: 500; font-size: clamp(28px, 3.4vw, 38px);
+    line-height: 1.2; margin: 0 0 16px;
+  }
+  .brand-copy p { font-size: 14.5px; line-height: 1.7; color: rgba(255,255,255,0.72); margin: 0; }
+
+  .brand-foot { position: relative; z-index: 1; font-size: 12.5px; color: rgba(255,255,255,0.45); }
+
+  /* ===== Right panel : form ===== */
+  .form-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .form-card {
+    width: 100%;
+    max-width: 380px;
+  }
+  .form-card h2 {
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px;
+    color: var(--ink); margin: 0 0 6px;
+  }
+  .form-card .sub { font-size: 14px; color: #6B7280; margin: 0 0 32px; }
+
+  .field { margin-bottom: 18px; }
+  .field label {
+    display: block; font-size: 12.5px; font-weight: 600; color: var(--ink);
+    margin-bottom: 6px; letter-spacing: 0.01em;
+  }
+  .field input {
+    width: 100%; padding: 11px 14px; border-radius: 8px;
+    border: 1.5px solid #E3DFD3; background: var(--chalk);
+    font-family: 'Inter', sans-serif; font-size: 14px; color: var(--slate);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field input:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.16);
+  }
+  .field input::placeholder { color: #A7ADB6; }
+
+  .row-between { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6B7280; }
+  .remember input { accent-color: var(--baobab); width: 15px; height: 15px; }
+  .forgot { font-size: 13px; color: var(--ink); text-decoration: none; font-weight: 600; }
+  .forgot:hover { text-decoration: underline; }
+
+  .submit-btn {
+    width: 100%; padding: 12px 16px; border: none; border-radius: 8px;
+    background: var(--ink); color: var(--chalk); font-family: 'Inter', sans-serif;
+    font-size: 14.5px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .submit-btn:hover { background: var(--ink-soft); }
+  .submit-btn:active { transform: translateY(1px); }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .submit-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35); border-top-color: var(--chalk);
+    animation: spin 0.7s linear infinite; display: none;
+  }
+  .submit-btn.loading .spinner { display: inline-block; }
+  .submit-btn.loading .btn-label { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .alert {
+    display: none; align-items: flex-start; gap: 10px;
+    background: var(--danger-soft); color: var(--danger);
+    border: 1px solid rgba(179,64,42,0.25); border-radius: 8px;
+    padding: 11px 13px; font-size: 13px; line-height: 1.5; margin-bottom: 18px;
+  }
+  .alert.show { display: flex; }
+  .alert svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+
+  .helper { text-align: center; font-size: 13px; color: #6B7280; margin-top: 28px; }
+  .helper a { color: var(--ink); font-weight: 600; text-decoration: none; }
+  .helper a:hover { text-decoration: underline; }
+
+  @media (max-width: 860px) {
+    body { grid-template-columns: 1fr; }
+    .brand-panel { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand-panel">
+  <div class="brand-mark">
+    <div class="brand-seal">
+      <div class="brand-seal-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10 12 5 2 10l10 5 10-5Z"/>
+          <path d="M6 12v5c0 1 3 3 6 3s6-2 6-3v-5"/>
+        </svg>
+      </div>
+    </div>
+    <span class="brand-name">SAAS-TOUBA</span>
+  </div>
+
+  <div class="brand-copy">
+    <span class="eyebrow">Espace établissement</span>
+    <h1>La gestion scolaire, sans papier ni approximation.</h1>
+    <p>Élèves, notes, présences, paiements et communication — centralisés pour chaque établissement, avec un accès propre à chaque rôle.</p>
+  </div>
+
+  <p class="brand-foot">© 2026 SAAS-TOUBA — Plateforme de gestion scolaire</p>
+</div>
+
+<div class="form-panel">
+  <div class="form-card">
+    <h2>Connexion</h2>
+    <p class="sub">Accédez à l'espace de votre établissement.</p>
+
+    <div class="alert" id="authAlert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v5"/><path d="M12 16h.01"/>
+      </svg>
+      <span id="authAlertText">Identifiants incorrects. Vérifiez votre email et votre mot de passe.</span>
+    </div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="email">Adresse email</label>
+        <input type="email" id="email" name="email" placeholder="vous@etablissement.sn" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <div class="row-between">
+        <label class="remember">
+          <input type="checkbox" id="remember" checked>
+          Rester connecté
+        </label>
+        <a href="#" class="forgot" onclick="handleForgotPassword(event)">Mot de passe oublié ?</a>
+      </div>
+      <button type="submit" class="submit-btn" id="submitBtn">
+        <span class="spinner"></span>
+        <span class="btn-label">Se connecter</span>
+      </button>
+    </form>
+
+    <p class="helper">Pas encore de compte ? <a href="#">Contactez votre établissement</a></p>
+  </div>
+</div>
+
+<script>
+  // =====================================================
+  // CONFIG SUPABASE — reprends les valeurs de ton js/config.js
+  // =====================================================
+  const SUPABASE_URL = 'https://twonzfpvzkjvrtspigra.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR3b256ZnB2emtqdnJ0c3BpZ3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3OTM4NzEsImV4cCI6MjEwMjM2OTg3MX0.00K6ZsxX5UaigPJC_OGwqa6lT-8YDFm2EQyM9Qq0Pa4';
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Page vers laquelle rediriger après connexion réussie
+  const REDIRECT_URL = 'dashboard.html';
+
+  const form = document.getElementById('loginForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const alertBox = document.getElementById('authAlert');
+  const alertText = document.getElementById('authAlertText');
+
+  function showError(message) {
+    alertText.textContent = message;
+    alertBox.classList.add('show');
+  }
+  function hideError() {
+    alertBox.classList.remove('show');
+  }
+  function setLoading(isLoading) {
+    submitBtn.disabled = isLoading;
+    submitBtn.classList.toggle('loading', isLoading);
+  }
+
+  // Si une session existe déjà (ex: retour sur la page), redirige direct
+  (async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) window.location.href = REDIRECT_URL;
+  })();
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+      showError('Merci de renseigner votre email et votre mot de passe.');
+      return;
+    }
+
+    setLoading(true);
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    setLoading(false);
+
+    if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        showError('Identifiants incorrects. Vérifiez votre email et votre mot de passe.');
+      } else if (error.message.includes('Email not confirmed')) {
+        showError('Votre adresse email n\'a pas encore été confirmée.');
+      } else {
+        showError("Une erreur est survenue. Réessayez dans un instant.");
+      }
+      console.error('Erreur de connexion:', error);
+      return;
+    }
+
+    // Connexion réussie -> redirection
+    window.location.href = REDIRECT_URL;
+  });
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    if (!email) {
+      showError('Renseignez d\'abord votre email ci-dessus, puis cliquez sur "Mot de passe oublié".');
+      return;
+    }
+    hideError();
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password.html'
+    });
+    if (error) {
+      showError("Impossible d'envoyer l'email de réinitialisation pour le moment.");
+      return;
+    }
+    alertText.textContent = 'Un email de réinitialisation a été envoyé si ce compte existe.';
+    alertBox.style.color = 'var(--baobab)';
+    alertBox.style.background = '#EAF1EA';
+    alertBox.style.borderColor = 'rgba(47,82,51,0.3)';
+    alertBox.classList.add('show');
+  }
+</script>
+
+</body>
+</html>
