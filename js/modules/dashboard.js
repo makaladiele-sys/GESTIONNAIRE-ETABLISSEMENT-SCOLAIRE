@@ -55,11 +55,10 @@ export async function refresh() {
     if (unpaid) items.push(`<div class="notice warning">💰 ${unpaid} paiement(s) incomplet(s) à suivre.</div>`);
     if (!classes.length) items.push(`<div class="notice">📚 Ajoutez vos premières classes dans "Classes".</div>`);
     if (!students.length) items.push(`<div class="notice">👨‍🎓 Ajoutez votre premier élève pour démarrer.</div>`);
-    items.push(`<div class="notice success">✓ Données synchronisées avec Supabase en temps réel.</div>`);
+   items.push(`<div class="notice success">✓ Données synchronisées en temps réel.</div>`);
     alertBox.innerHTML = items.join("");
   }
 }
-
 function set(id, val) {
   const e = document.getElementById(id);
   if (e) e.textContent = val;
