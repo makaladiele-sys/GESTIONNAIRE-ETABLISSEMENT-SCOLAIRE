@@ -367,9 +367,12 @@
 
       <!-- ============================================================ USERS -->
       <div class="page" id="users">
-        <div class="page-head"><div><h2>Utilisateurs & rôles</h2><p>Comptes rattachés à votre établissement.</p></div></div>
+        <div class="page-head">
+          <div><h2>Utilisateurs & rôles</h2><p>Comptes rattachés à votre établissement.</p></div>
+          <button class="btn btn-primary" id="openInviteUser">＋ Inviter un utilisateur</button>
+        </div>
         <div class="card">
-          <div class="notice">Pour ajouter un nouvel utilisateur (secrétaire, comptable, enseignant…), invitez-le depuis votre projet Supabase (Authentication → Invite user) en renseignant son <code>school_id</code> dans les métadonnées.</div>
+          <div class="notice">La personne invitée reçoit un e-mail pour choisir son mot de passe et accéder immédiatement à votre établissement, avec le rôle que vous lui attribuez.</div>
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th></tr></thead>
             <tbody id="usersBody"></tbody></table>
@@ -544,6 +547,25 @@
     </div>
     <div class="form-group full"><label>Message *</label><textarea id="fMsgBody" class="form-control" rows="5" required></textarea></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Envoyer</button></form>
+</div></div>
+
+<div class="modal" id="inviteUserModal"><div class="modal-box">
+  <div class="modal-head"><h3>Inviter un utilisateur</h3><button class="close" data-close-modal>×</button></div>
+  <form id="inviteUserForm"><div class="form-grid">
+    <div class="form-group full"><label>Nom complet *</label><input id="fInviteName" class="form-control" required></div>
+    <div class="form-group full"><label>E-mail *</label><input id="fInviteEmail" type="email" class="form-control" required></div>
+    <div class="form-group full"><label>Rôle *</label>
+      <select id="fInviteRole" class="form-control" required>
+        <option value="secretary">Secrétaire</option>
+        <option value="accountant">Comptable</option>
+        <option value="teacher">Enseignant</option>
+        <option value="parent">Parent</option>
+        <option value="student">Élève</option>
+        <option value="admin">Direction (co-administrateur)</option>
+      </select>
+      <span class="hint">La personne recevra un e-mail pour définir son mot de passe.</span>
+    </div>
+  </div><button class="btn btn-primary" style="margin-top:16px">Envoyer l'invitation</button></form>
 </div></div>
 
 <div class="toast" id="toast"></div>
