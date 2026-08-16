@@ -283,17 +283,27 @@
       <!-- ============================================================ ATTENDANCE -->
       <div class="page" id="attendance">
         <div class="page-head">
-          <div><h2>Présences & assiduité</h2><p>Saisie journalière par classe.</p></div>
-          <button class="btn btn-primary" id="openAddAttendance">＋ Saisie du jour</button>
+          <div><h2>Présences & assiduité</h2><p>Faites l'appel par classe et consultez la liste des absents, jour par jour.</p></div>
+          <button class="btn btn-primary" id="openAddAttendance">📋 Faire l'appel</button>
         </div>
         <div class="grid3">
-          <div class="card"><div class="label">Présents (aujourd'hui)</div><div class="value" id="attPresent">0</div></div>
-          <div class="card"><div class="label">Absents (aujourd'hui)</div><div class="value" id="attAbsent">0</div></div>
-          <div class="card"><div class="label">Retards (aujourd'hui)</div><div class="value" id="attLate">0</div></div>
+          <div class="card"><div class="label">Présents (ce jour)</div><div class="value" id="attPresent">0</div></div>
+          <div class="card"><div class="label">Absents (ce jour)</div><div class="value" id="attAbsent">0</div></div>
+          <div class="card"><div class="label">Retards (ce jour)</div><div class="value" id="attLate">0</div></div>
         </div>
         <div class="card">
+          <div class="filters">
+            <input id="fAttFilterDate" type="date">
+            <select id="attClassFilter"><option value="">Toutes les classes</option></select>
+            <select id="attStatusFilter">
+              <option value="Absent">Absents</option>
+              <option value="">Tous les statuts</option>
+              <option value="Présent">Présents</option>
+              <option value="Retard">Retards</option>
+            </select>
+          </div>
           <div class="table-wrap">
-            <table class="table"><thead><tr><th>Date</th><th>Classe</th><th>Présents</th><th>Absents</th><th>Retards</th><th>Taux</th></tr></thead>
+            <table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Statut</th><th>Date</th></tr></thead>
             <tbody id="attendanceBody"></tbody></table>
           </div>
         </div>
@@ -501,14 +511,13 @@
 </div></div>
 
 <div class="modal" id="attendanceModal"><div class="modal-box">
-  <div class="modal-head"><h3>Saisie des présences</h3><button class="close" data-close-modal>×</button></div>
-  <form id="attendanceForm"><div class="form-grid">
-    <div class="form-group"><label>Classe *</label><input id="fAttClass" class="form-control" required placeholder="Ex. 6ème A"></div>
-    <div class="form-group"><label>Date</label><input id="fAttDate" type="date" class="form-control"></div>
-    <div class="form-group"><label>Présents</label><input id="fAttPresent" type="number" min="0" class="form-control" value="0"></div>
-    <div class="form-group"><label>Absents</label><input id="fAttAbsent" type="number" min="0" class="form-control" value="0"></div>
-    <div class="form-group"><label>Retards</label><input id="fAttLate" type="number" min="0" class="form-control" value="0"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
+  <div class="modal-head"><h3>Faire l'appel</h3><button class="close" data-close-modal>×</button></div>
+  <div class="form-grid" style="margin-bottom:16px">
+    <div class="form-group"><label>Classe *</label><select id="fRollClass" class="form-control"></select></div>
+    <div class="form-group"><label>Date</label><input id="fRollDate" type="date" class="form-control"></div>
+  </div>
+  <div id="rollCallList" class="table-wrap" style="max-height:360px;overflow-y:auto"></div>
+  <button class="btn btn-primary" id="saveRollCallBtn" style="margin-top:16px">Enregistrer l'appel</button>
 </div></div>
 
 <div class="modal" id="paymentModal"><div class="modal-box">
