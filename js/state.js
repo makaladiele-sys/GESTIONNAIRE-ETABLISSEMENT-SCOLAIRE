@@ -22,15 +22,30 @@ export function schoolId() {
   return state.profile?.school_id || null;
 }
 
-export async function loadProfileAndSchool(userId) {
-  const sb = getSupabase();
-  const { data: profile, error: pErr } = await sb
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  if (pErr || !profile) throw new Error("Profil introuvable pour cet utilisateur.");
+// Empêche les appels concurrents de loadProfileAndSchool() de déclencher
+// plusieurs requêtes en parallèle avec des résultats incohérents.
+let _loadingPromise = null;
 
+export async function loadProfileAndSchool(userId) {
+  if (_loadingPromise) return _loadingPromise;
+  _loadingPromise = _loadProfileAndSchoolInner(userId).finally(() => {
+    _loadingPromise = null;
+  });
+  return _loadingPromise;
+}
+
+async function _loadProfileAndSchoolInner(userId) {
+  const sb = getSupabase();
+
+  // Force la résolution/rehydratation complète de la session AVANT toute
+  // requête dépendante de RLS. Sans ça, juste après une connexion, le
+  // token peut ne pas encore être attaché aux requêtes REST, ce qui fait
+  // que RLS voit une requête "anonyme" -> 0 ligne -> Supabase renvoie 406
+  // avec .single(), alors que le profil existe bel et bien.
+  await sb.auth.getSession();
+
+  const profile = await _fetchProfileWithRetry(sb, userId);
+  if (!profile) throw new Error("Profil introuvable pour cet utilisateur.");
   state.profile = profile;
 
   if (profile.school_id) {
@@ -38,7 +53,7 @@ export async function loadProfileAndSchool(userId) {
       .from("schools")
       .select("*")
       .eq("id", profile.school_id)
-      .single();
+      .maybeSingle();
     if (sErr || !school) throw new Error("Établissement introuvable pour ce profil.");
     if (profile.role !== "platform_admin" && school.status !== "active") {
       throw new Error(
@@ -47,9 +62,34 @@ export async function loadProfileAndSchool(userId) {
     }
     state.school = school;
   } else {
+    // Cas normal pour platform_admin : pas d'établissement rattaché.
     state.school = null;
   }
+
   return { profile, school: state.school };
+}
+
+// maybeSingle() ne lève pas d'erreur 406 sur 0 ligne, mais peut légitimement
+// renvoyer null lors du tout premier instant post-connexion (RLS pas encore
+// synchro). On retente donc 2-3 fois avec un petit délai avant de conclure
+// à un vrai profil manquant.
+async function _fetchProfileWithRetry(sb, userId, attempts = 3, delayMs = 300) {
+  for (let i = 0; i < attempts; i++) {
+    const { data: profile, error } = await sb
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profile) return profile;
+    if (error && error.code && error.code !== "PGRST116") {
+      // Erreur réelle (réseau, RLS mal configurée, etc.) : pas la peine
+      // de retenter, on remonte l'erreur telle quelle.
+      throw error;
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
 }
 
 // ---- CRUD génériques --------------------------------------------------
