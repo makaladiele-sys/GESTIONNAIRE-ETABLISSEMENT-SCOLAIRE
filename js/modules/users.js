@@ -2,8 +2,8 @@
 // Utilisateurs & rôles de l'établissement
 // ==========================================================================
 import { getSupabase } from "../supabaseClient.js";
-import { state } from "../state.js";
-import { escapeHtml } from "../ui.js";
+import { state, isPlatformAdmin } from "../state.js";
+import { escapeHtml, toast, openModal, closeModal } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -38,7 +38,37 @@ export async function refresh() {
 }
 
 export function mount() {
-  // La création d'utilisateurs additionnels (secrétaire, comptable, enseignant…)
-  // se fait via Supabase Auth (invitation par e-mail) ou l'API admin côté
-  // serveur — jamais avec la clé anon exposée au navigateur.
+  el("openInviteUser")?.addEventListener("click", () => {
+    el("inviteUserForm")?.reset();
+    openModal("inviteUserModal");
+  });
+
+  el("inviteUserForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (isPlatformAdmin()) {
+      toast("Connectez-vous avec un compte établissement pour inviter des utilisateurs.");
+      return;
+    }
+    const sb = getSupabase();
+    const payload = {
+      full_name: el("fInviteName").value.trim(),
+      email: el("fInviteEmail").value.trim().toLowerCase(),
+      role: el("fInviteRole").value,
+    };
+    const btn = e.target.querySelector("button[type=submit]") || e.submitter;
+    if (btn) btn.disabled = true;
+    try {
+      const { data, error } = await sb.functions.invoke("invite-user", { body: payload });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast("Invitation envoyée à " + payload.email);
+      closeModal("inviteUserModal");
+      el("inviteUserForm").reset();
+      await refresh();
+    } catch (err) {
+      toast("Erreur : " + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 }
