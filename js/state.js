@@ -85,3 +85,12 @@ export async function deleteRow(table, id) {
   if (error) throw error;
   return true;
 }
+
+export async function upsertRows(table, rows, onConflict) {
+  const sb = getSupabase();
+  const sid = schoolId();
+  const payload = rows.map((r) => ({ ...r, school_id: r.school_id || sid }));
+  const { data, error } = await sb.from(table).upsert(payload, { onConflict }).select();
+  if (error) throw error;
+  return data;
+}
