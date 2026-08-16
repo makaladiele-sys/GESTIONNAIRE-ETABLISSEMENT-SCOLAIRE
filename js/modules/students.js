@@ -62,6 +62,17 @@ function resetForm() {
   el("studentModalTitle") && (el("studentModalTitle").textContent = "Nouvel élève");
 }
 
+function generateMatricule() {
+  const existing = new Set((state.cache.students || []).map((s) => s.matricule));
+  let n = (state.cache.students || []).length + 1;
+  let candidate = "ELV-" + String(n).padStart(4, "0");
+  while (existing.has(candidate)) {
+    n++;
+    candidate = "ELV-" + String(n).padStart(4, "0");
+  }
+  return candidate;
+}
+
 function fillForm(s) {
   editingId = s.id;
   el("studentModalTitle") && (el("studentModalTitle").textContent = "Modifier l'élève");
@@ -80,6 +91,7 @@ export function mount() {
   el("openAddStudent")?.addEventListener("click", () => {
     resetForm();
     el("fStudentClass") && (el("fStudentClass").innerHTML = classOptions());
+    el("fStudentMat") && (el("fStudentMat").value = generateMatricule());
     openModal("studentModal");
   });
 
