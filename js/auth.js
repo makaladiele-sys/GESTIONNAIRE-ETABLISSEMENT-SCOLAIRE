@@ -61,8 +61,26 @@ function showSignupView(show) {
       : "Connexion sécurisée à votre établissement");
 }
 
+// --------------------------------------------------------------------------
+// Point d'entrée unique et protégé vers loadProfileAndSchool + onAuthenticated.
+// --------------------------------------------------------------------------
+
+// Utilisateur actuellement en cours de chargement (évite les doubles appels
+// concurrents déclenchés par onAuthStateChange + getSession() en parallèle).
+let _enteringUserId = null;
+
 async function loadContextAndEnter(session) {
   if (!session?.user) return;
+
+  // Déjà en cours de chargement pour cet utilisateur -> on ignore.
+  if (_enteringUserId === session.user.id) return;
+
+  // Déjà chargé avec succès pour cet utilisateur -> on ignore (évite un
+  // second passage complet quand TOKEN_REFRESHED se déclenche par ex.).
+  if (state.user?.id === session.user.id && state.profile) return;
+
+  _enteringUserId = session.user.id;
+
   try {
     setBusy(true);
     clearError();
@@ -76,11 +94,16 @@ async function loadContextAndEnter(session) {
     try {
       await sb.auth.signOut();
     } catch (_) {}
+    state.user = null;
     lockGate();
     showSignupView(false);
     showError(e.message || "Impossible de charger votre profil.");
   } finally {
     setBusy(false);
+    // On libère le verrou seulement en cas d'échec (state.user remis à null
+    // ci-dessus) ; en cas de succès, la garde "déjà chargé" plus haut prend
+    // le relais pour empêcher tout rechargement inutile.
+    if (!state.user) _enteringUserId = null;
   }
 }
 
@@ -219,6 +242,7 @@ export function initAuth() {
       state.user = null;
       state.profile = null;
       state.school = null;
+      _enteringUserId = null;
       lockGate();
       onSignedOut();
       return;
@@ -230,10 +254,15 @@ export function initAuth() {
       return;
     }
     if (session?.user && ["SIGNED_IN", "INITIAL_SESSION", "TOKEN_REFRESHED"].includes(event)) {
-      if (state.user?.id !== session.user.id) await loadContextAndEnter(session);
+      await loadContextAndEnter(session);
     }
   });
 
+  // Filet de sécurité pour les environnements où onAuthStateChange ne
+  // livre pas INITIAL_SESSION assez tôt. loadContextAndEnter() étant
+  // désormais idempotente (verrou _enteringUserId), cet appel ne peut
+  // plus provoquer de double chargement avec celui déclenché par
+  // onAuthStateChange ci-dessus.
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) loadContextAndEnter(session);
     else lockGate();
