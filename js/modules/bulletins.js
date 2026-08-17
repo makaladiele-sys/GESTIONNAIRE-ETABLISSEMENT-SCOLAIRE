@@ -10,7 +10,7 @@ export async function refresh() {
   if (!state.cache.grades) await listRows("grades");
   if (!state.cache.students) await listRows("students");
   await listRows("teacher_assignments");
-  await listRows("grade_submissions");
+  await listRows("grade_submissions", { orderBy: "submitted_at", ascending: false });
   renderTable();
 }
 
