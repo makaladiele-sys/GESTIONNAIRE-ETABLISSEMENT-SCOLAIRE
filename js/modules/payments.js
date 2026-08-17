@@ -1,21 +1,30 @@
 // ==========================================================================
-// Facturation & Paiements
+// Facturation & Paiements — les totaux "scolarité" utilisent le même calcul
+// que Recouvrement (feeCalc.js), pour rester toujours synchronisés. Le
+// montant suggéré à l'encaissement est aussi calculé à partir de ce solde.
 // ==========================================================================
 import { listRows, insertRow, state } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
+import { computeCollectionsRows } from "./feeCalc.js";
 
 const el = (id) => document.getElementById(id);
 
 export async function refresh() {
   if (!state.cache.students) await listRows("students");
+  if (!state.cache.classes) await listRows("classes");
   const payments = await listRows("payments", { orderBy: "created_at", ascending: false });
   const currency = state.school?.currency || "FCFA";
 
-  const due = payments.reduce((a, p) => a + Number(p.amount_due || 0), 0);
-  const paid = payments.reduce((a, p) => a + Number(p.amount_paid || 0), 0);
-  el("payDue") && (el("payDue").textContent = fmtMoney(due, currency));
-  el("payPaid") && (el("payPaid").textContent = fmtMoney(paid, currency));
-  el("payUnpaid") && (el("payUnpaid").textContent = fmtMoney(due - paid, currency));
+  // Mêmes totaux que la page Recouvrement (frais mensuel × mois écoulés,
+  // face aux paiements motif "Scolarité").
+  const rows = computeCollectionsRows().filter((r) => r.configured);
+  const expected = rows.reduce((a, r) => a + r.expected, 0);
+  const collected = rows.reduce((a, r) => a + r.paid, 0);
+  const overdue = rows.reduce((a, r) => a + Math.max(0, r.remaining), 0);
+
+  el("payDue") && (el("payDue").textContent = fmtMoney(expected, currency));
+  el("payPaid") && (el("payPaid").textContent = fmtMoney(collected, currency));
+  el("payUnpaid") && (el("payUnpaid").textContent = fmtMoney(overdue, currency));
 
   renderTable(payments, currency);
 }
@@ -44,12 +53,40 @@ function studentOptions() {
   return (state.cache.students || []).map((s) => `<option>${escapeHtml(s.name)}</option>`).join("");
 }
 
+function updateAmountHint() {
+  const hint = el("payAmountHint");
+  if (!hint) return;
+  const reason = el("fPayReason")?.value;
+  const studentName = el("fPayStudent")?.value;
+  if (reason !== "Scolarité" || !studentName) {
+    hint.textContent = "";
+    return;
+  }
+  const row = computeCollectionsRows().find((r) => r.student.name === studentName);
+  if (!row || !row.configured) {
+    hint.textContent = "Frais mensuel non configuré pour la classe de cet élève (voir Classes).";
+    return;
+  }
+  const currency = state.school?.currency || "FCFA";
+  if (row.remaining > 0) {
+    hint.textContent = `Reste dû (scolarité, ${row.months} mois écoulé(s)) : ${fmtMoney(row.remaining, currency)} — montant pré-rempli, modifiable.`;
+    el("fPayAmount").value = Math.round(row.remaining);
+  } else {
+    hint.textContent = "Cet élève est à jour sur sa scolarité.";
+  }
+}
+
 export function mount() {
   el("openAddPayment")?.addEventListener("click", () => {
     el("fPayStudent") && (el("fPayStudent").innerHTML = studentOptions());
     el("paymentForm")?.reset();
+    el("payAmountHint") && (el("payAmountHint").textContent = "");
     openModal("paymentModal");
+    updateAmountHint();
   });
+
+  el("fPayStudent")?.addEventListener("change", updateAmountHint);
+  el("fPayReason")?.addEventListener("change", updateAmountHint);
 
   el("paymentsBody")?.addEventListener("click", (e) => {
     const id = e.target.closest("[data-receipt]")?.dataset.receipt;
