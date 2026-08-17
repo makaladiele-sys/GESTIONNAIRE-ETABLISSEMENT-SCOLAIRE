@@ -2,7 +2,7 @@
 // Niveaux & Classes
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
-import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
+import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
 let editingId = null;
@@ -29,6 +29,7 @@ function renderTable(classes, students) {
         <td>${escapeHtml(c.level)}</td>
         <td><b>${escapeHtml(c.name)}</b></td>
         <td>${effectif}</td>
+        <td>${Number(c.monthly_fee) > 0 ? fmtMoney(c.monthly_fee, state.school?.currency) : '<span class="badge orange">Non configuré</span>'}</td>
         <td>${escapeHtml(c.room || "—")}</td>
         <td>${escapeHtml(c.main_teacher || "—")}</td>
         <td>
@@ -37,7 +38,7 @@ function renderTable(classes, students) {
         </td>
       </tr>`;
       })
-      .join("") || `<tr><td colspan="7" class="empty">Aucune classe. Créez votre première classe.</td></tr>`;
+      .join("") || `<tr><td colspan="8" class="empty">Aucune classe. Créez votre première classe.</td></tr>`;
 
   const stats = document.getElementById("classSummaryStats");
   if (stats) {
@@ -61,6 +62,7 @@ function fillForm(c) {
   el("fClassLevel").value = c.level || "";
   el("fClassName").value = c.name || "";
   el("fClassRoom").value = c.room || "";
+  el("fClassFee").value = c.monthly_fee || "";
   el("fClassTeacher").value = c.main_teacher || "";
 }
 
@@ -96,6 +98,7 @@ export function mount() {
       level: el("fClassLevel").value.trim(),
       name: el("fClassName").value.trim(),
       room: el("fClassRoom").value.trim(),
+      monthly_fee: Number(el("fClassFee").value) || 0,
       main_teacher: el("fClassTeacher").value.trim(),
     };
     try {
