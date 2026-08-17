@@ -9,7 +9,22 @@ const el = (id) => document.getElementById(id);
 export async function refresh() {
   if (!state.cache.grades) await listRows("grades");
   if (!state.cache.students) await listRows("students");
+  await listRows("teacher_assignments");
+  await listRows("grade_submissions");
   renderTable();
+}
+
+function subjectsForClass(className) {
+  return [...new Set((state.cache.teacher_assignments || []).filter((a) => a.class_name === className).map((a) => a.subject))];
+}
+
+function completeness(className, period) {
+  const subjects = subjectsForClass(className);
+  if (!subjects.length) return null; // pas d'affectations configurées, indicateur non pertinent
+  const received = subjects.filter((subj) =>
+    (state.cache.grade_submissions || []).some((s) => s.class_name === className && s.subject === subj && s.period === period)
+  ).length;
+  return { received, total: subjects.length };
 }
 
 function computeAverages(period) {
@@ -37,16 +52,19 @@ function renderTable() {
     rows
       .map((x) => {
         const label = x.avg == null ? "—" : x.avg >= 16 ? "Très bien" : x.avg >= 14 ? "Bien" : x.avg >= 10 ? "Passable" : "À améliorer";
+        const comp = x.student ? completeness(x.student.class_name, period) : null;
+        const compBadge = comp ? `<span class="badge ${comp.received >= comp.total ? "green" : "orange"}">${comp.received}/${comp.total} matières reçues</span>` : "—";
         return `<tr>
         <td><b>${escapeHtml(x.name)}</b></td>
         <td><span class="id-badge">${escapeHtml(x.student?.matricule || "—")}</span></td>
         <td>${escapeHtml(x.student?.class_name || "—")}</td>
         <td>${x.avg == null ? "—" : x.avg.toFixed(2) + "/20"}</td>
         <td><span class="badge ${x.avg >= 10 ? "green" : "red"}">${label}</span></td>
+        <td>${compBadge}</td>
         <td><button class="btn btn-light btn-sm" data-open="${encodeURIComponent(x.name)}">Voir / imprimer</button></td>
       </tr>`;
       })
-      .join("") || `<tr><td colspan="6" class="empty">Aucune note saisie pour cette période. Rendez-vous dans "Notes" pour commencer.</td></tr>`;
+      .join("") || `<tr><td colspan="7" class="empty">Aucune note saisie pour cette période. Rendez-vous dans "Notes" pour commencer.</td></tr>`;
 }
 
 function openBulletin(name) {
