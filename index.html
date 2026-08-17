@@ -323,10 +323,11 @@
           <div><h2>Facturation & Paiements</h2><p>Mensualités, échéances et reçus.</p></div>
           <button class="btn btn-primary" id="openAddPayment">＋ Encaisser un paiement</button>
         </div>
+        <div class="notice">💡 Ces totaux (scolarité uniquement) sont calculés exactement comme dans <b>Recouvrement</b> — les deux pages affichent toujours les mêmes chiffres.</div>
         <div class="grid3">
-          <div class="card"><div class="label">Facturé</div><div class="value" id="payDue">0</div></div>
-          <div class="card"><div class="label">Encaissé</div><div class="value" id="payPaid">0</div></div>
-          <div class="card"><div class="label">Impayé</div><div class="value" id="payUnpaid">0</div></div>
+          <div class="card"><div class="label">Attendu (scolarité, cumulé)</div><div class="value" id="payDue">0</div></div>
+          <div class="card"><div class="label">Encaissé (scolarité)</div><div class="value" id="payPaid">0</div></div>
+          <div class="card"><div class="label">En retard (scolarité)</div><div class="value" id="payUnpaid">0</div></div>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -574,7 +575,9 @@
     <div class="form-group"><label>Motif</label>
       <select id="fPayReason" class="form-control"><option>Scolarité</option><option>Inscription</option><option>Cantine</option><option>Transport</option><option>Activité</option><option>Examen</option></select>
     </div>
-    <div class="form-group"><label>Montant *</label><input id="fPayAmount" type="number" min="0" class="form-control" required></div>
+    <div class="form-group"><label>Montant *</label><input id="fPayAmount" type="number" min="0" class="form-control" required>
+      <span class="hint" id="payAmountHint"></span>
+    </div>
     <div class="form-group full"><label>Moyen</label>
       <select id="fPayMethod" class="form-control"><option>Espèces</option><option>Wave / Mobile Money</option><option>Virement</option><option>Chèque</option><option>En ligne</option></select>
     </div>
