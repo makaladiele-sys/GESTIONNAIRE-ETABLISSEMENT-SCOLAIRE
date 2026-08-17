@@ -35,7 +35,7 @@ export async function refresh() {
   if (!state.cache.classes) await listRows("classes");
   if (!state.cache.subjects) await listRows("subjects");
   await listRows("teacher_assignments");
-  await listRows("grade_submissions");
+  await listRows("grade_submissions", { orderBy: "submitted_at", ascending: false });
   const grades = await listRows("grades", { orderBy: "created_at", ascending: false });
   renderSubmissions();
   renderTable(grades);
