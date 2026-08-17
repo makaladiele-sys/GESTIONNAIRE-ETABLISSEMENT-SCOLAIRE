@@ -16,6 +16,7 @@ import * as grades from "./modules/grades.js";
 import * as attendance from "./modules/attendance.js";
 import * as payments from "./modules/payments.js";
 import * as cash from "./modules/cash.js";
+import * as collections from "./modules/collections.js";
 import * as bulletins from "./modules/bulletins.js";
 import * as communication from "./modules/communication.js";
 import * as reports from "./modules/reports.js";
@@ -34,6 +35,7 @@ const modules = {
   attendance,
   payments,
   cash,
+  collections,
   bulletins,
   communication,
   reports,
@@ -133,16 +135,17 @@ function showConfigScreen() {
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0d1230;padding:24px">
       <div style="max-width:520px;background:#fff;border-radius:18px;padding:32px;font-family:Inter,system-ui,sans-serif;line-height:1.6">
         <h1 style="font-family:Sora,sans-serif;margin-bottom:10px">Configuration requise</h1>
-       <p style="color:#657089;margin-bottom:16px">
-  Le fichier de configuration technique est introuvable ou incomplet.
-</p>
-<ol style="margin:0 0 16px 20px;color:#12172b">
-  <li>Copiez <code>js/config.example.js</code> en <code>js/config.js</code>.</li>
-  <li>Renseignez les identifiants de connexion à la base de données.</li>
-  <li>Exécutez <code>sql/schema.sql</code> dans l'éditeur SQL de votre projet.</li>
-  <li>Rechargez cette page.</li>
-</ol>
- <p style="color:#657089;font-size:13px">Voir le fichier <code>README.md</code> pour le guide complet.</p>
+        <p style="color:#657089;margin-bottom:16px">
+          Ce fichier <code>js/config.js</code> est introuvable ou incomplet. Il contient l'URL et la clé
+          <b>anon</b> publique de votre projet Supabase.
+        </p>
+        <ol style="margin:0 0 16px 20px;color:#12172b">
+          <li>Copiez <code>js/config.example.js</code> en <code>js/config.js</code>.</li>
+          <li>Renseignez <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> (Supabase → Project Settings → API).</li>
+          <li>Exécutez <code>sql/schema.sql</code> dans l'éditeur SQL de votre projet Supabase.</li>
+          <li>Rechargez cette page.</li>
+        </ol>
+        <p style="color:#657089;font-size:13px">Voir le fichier <code>README.md</code> pour le guide complet.</p>
       </div>
     </div>`;
 }
