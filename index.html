@@ -80,6 +80,7 @@
 
       <div class="nav-title">Finance & Administration</div>
       <button data-page="payments"><span class="ic">💰</span> Facturation & Paiements</button>
+      <button data-page="collections"><span class="ic">📐</span> Recouvrement</button>
       <button data-page="cash"><span class="ic">🏦</span> Caisse & Dépenses</button>
       <button data-page="reports"><span class="ic">📊</span> Rapports</button>
       <button data-page="communication"><span class="ic">📣</span> Communication</button>
@@ -217,7 +218,7 @@
             </select>
           </div>
           <div class="table-wrap">
-            <table class="table"><thead><tr><th>Cycle</th><th>Niveau</th><th>Classe</th><th>Effectif</th><th>Salle</th><th>Prof. principal</th><th>Action</th></tr></thead>
+            <table class="table"><thead><tr><th>Cycle</th><th>Niveau</th><th>Classe</th><th>Effectif</th><th>Frais mensuel</th><th>Salle</th><th>Prof. principal</th><th>Action</th></tr></thead>
             <tbody id="classesBody"></tbody></table>
           </div>
         </div>
@@ -240,10 +241,17 @@
       <!-- ============================================================ GRADES -->
       <div class="page" id="grades">
         <div class="page-head">
-          <div><h2>Notes & Gradebook</h2><p>Devoirs, interrogations, compositions et examens.</p></div>
+          <div><h2>Notes & Gradebook</h2><p>Devoir 1, Devoir 2, Devoir 3, Composition — chaque enseignant ne voit que ses classes et matières.</p></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-light" onclick="document.getElementById('importGradesInput').click()">📥 Import Excel</button>
             <button class="btn btn-primary" id="openAddGrade">＋ Saisir une note</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Suivi des envois</h3><span class="muted">Classe + matière + période envoyées au directeur</span></div>
+          <div class="table-wrap">
+            <table class="table"><thead><tr><th>Classe</th><th>Matière</th><th>Période</th><th>Statut</th><th>Action</th></tr></thead>
+            <tbody id="submissionsBody"></tbody></table>
           </div>
         </div>
         <div class="card">
@@ -273,7 +281,7 @@
             <select id="bulletinPeriod"><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
           </div>
           <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Matricule</th><th>Classe</th><th>Moyenne</th><th>Appréciation</th><th>Action</th></tr></thead>
+            <table class="table"><thead><tr><th>Élève</th><th>Matricule</th><th>Classe</th><th>Moyenne</th><th>Appréciation</th><th>Reçu</th><th>Action</th></tr></thead>
             <tbody id="bulletinsBody"></tbody></table>
           </div>
         </div>
@@ -328,6 +336,35 @@
         </div>
       </div>
 
+      <!-- ============================================================ COLLECTIONS -->
+      <div class="page" id="collections">
+        <div class="page-head">
+          <div><h2>Recouvrement</h2><p>Ce qui doit être recouvré (frais mensuel × mois écoulés depuis l'inscription) comparé à ce qui a réellement été payé, avec la liste nominative des retards.</p></div>
+        </div>
+        <div class="notice warning" id="collectionsNotice" style="display:none"></div>
+        <div class="stats">
+          <div class="stat"><div><div class="label">Attendu (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
+          <div class="stat"><div><div class="label">Recouvré</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
+          <div class="stat"><div><div class="label">En retard</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
+          <div class="stat"><div><div class="label">Taux de recouvrement</div><div class="value" id="colRate">0%</div></div><div class="stat-icon">📊</div></div>
+        </div>
+        <div class="card">
+          <div class="filters">
+            <select id="colClassFilter"><option value="">Toutes les classes</option></select>
+            <select id="colStatusFilter">
+              <option value="overdue">En retard uniquement</option>
+              <option value="">Tous les élèves</option>
+              <option value="ok">À jour uniquement</option>
+            </select>
+            <input id="colSearch" placeholder="Rechercher élève ou parent…">
+          </div>
+          <div class="table-wrap">
+            <table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Parent</th><th>Téléphone</th><th>Mois écoulés</th><th>Attendu</th><th>Payé</th><th>Reste (retard)</th><th>Dernier mode</th><th>Statut</th></tr></thead>
+            <tbody id="collectionsBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
       <!-- ============================================================ CASH -->
       <div class="page" id="cash">
         <div class="page-head">
@@ -367,6 +404,7 @@
           <div><h2>Communication</h2><p>Notifications internes envoyées aux parents, élèves ou enseignants.</p></div>
           <button class="btn btn-primary" id="openAddMessage">＋ Nouveau message</button>
         </div>
+        <div class="notice">📱 Le canal <b>SMS</b> envoie un message réel. Les canaux Notification interne / Email / WhatsApp sont pour l'instant seulement enregistrés en historique, en attendant leur configuration.</div>
         <div class="card">
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Date</th><th>Canal</th><th>Audience</th><th>Message</th><th>Statut</th></tr></thead>
@@ -478,6 +516,7 @@
     <div class="form-group"><label>Niveau *</label><input id="fClassLevel" class="form-control" placeholder="Ex. 6e" required></div>
     <div class="form-group"><label>Nom de la classe *</label><input id="fClassName" class="form-control" placeholder="Ex. 6ème A" required></div>
     <div class="form-group"><label>Salle</label><input id="fClassRoom" class="form-control"></div>
+    <div class="form-group"><label>Frais mensuel (scolarité)</label><input id="fClassFee" type="number" min="0" step="500" class="form-control" placeholder="Ex. 15000"></div>
     <div class="form-group full"><label>Professeur principal</label><input id="fClassTeacher" class="form-control"></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
 </div></div>
@@ -497,17 +536,25 @@
 <div class="modal" id="gradeModal"><div class="modal-box">
   <div class="modal-head"><h3>Saisie d'une note</h3><button class="close" data-close-modal>×</button></div>
   <form id="gradeForm"><div class="form-grid">
+    <div class="form-group"><label>Classe *</label><select id="fGradeClass" class="form-control" required></select></div>
+    <div class="form-group"><label>Matière *</label><select id="fGradeSubject" class="form-control" required></select></div>
     <div class="form-group full"><label>Élève *</label><select id="fGradeStudent" class="form-control" required></select></div>
-    <div class="form-group"><label>Matière *</label><input id="fGradeSubject" class="form-control" required placeholder="Ex. Mathématiques"></div>
     <div class="form-group"><label>Type</label>
-      <select id="fGradeType" class="form-control"><option>Devoir</option><option>Interrogation</option><option>Composition</option><option>Examen</option><option>Oral</option><option>TP</option></select>
+      <select id="fGradeType" class="form-control">
+        <option value="Devoir 1">Devoir 1</option>
+        <option value="Devoir 2">Devoir 2</option>
+        <option value="Devoir 3">Devoir 3</option>
+        <option value="Composition">Composition</option>
+      </select>
     </div>
     <div class="form-group"><label>Note /20 *</label><input id="fGradeNote" type="number" min="0" max="20" step=".01" class="form-control" required></div>
     <div class="form-group"><label>Coefficient</label><input id="fGradeCoef" type="number" min="0.1" step=".1" value="1" class="form-control"></div>
-    <div class="form-group full"><label>Période</label>
+    <div class="form-group"><label>Période</label>
       <select id="fGradePeriod" class="form-control"><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
     </div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
+  </div>
+  <div id="gradeLockNotice" class="notice warning" style="display:none;margin-top:14px"></div>
+  <button class="btn btn-primary" style="margin-top:16px" id="saveGradeBtn">Enregistrer</button></form>
 </div></div>
 
 <div class="modal" id="attendanceModal"><div class="modal-box">
@@ -573,6 +620,12 @@
         <option value="admin">Direction (co-administrateur)</option>
       </select>
       <span class="hint">La personne recevra un e-mail pour définir son mot de passe.</span>
+    </div>
+    <div class="form-group full" id="inviteAssignmentsWrap" style="display:none">
+      <label>Classes et matières enseignées *</label>
+      <div id="inviteAssignmentsList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button type="button" class="btn btn-light btn-sm" id="addAssignmentRow" style="margin-top:8px">＋ Ajouter une affectation</button>
+      <span class="hint">L'enseignant ne pourra saisir des notes que pour ces classes/matières précises.</span>
     </div>
   </div><button class="btn btn-primary" style="margin-top:16px">Envoyer l'invitation</button></form>
 </div></div>
