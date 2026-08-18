@@ -171,10 +171,11 @@
       <!-- ============================================================ PARENTS -->
       <div class="page" id="parents">
         <div class="page-head">
-          <div><h2>Parents / Tuteurs</h2><p>Contacts, enfants liés et soldes.</p></div>
-          <button class="btn btn-primary" id="openAddParent">＋ Ajouter un parent</button>
+          <div><h2>Parents / Tuteurs</h2><p>Générée automatiquement à l'inscription des élèves — contacts, enfants liés et soldes.</p></div>
+          <button class="btn btn-primary" id="openAddParent">＋ Parent sans élève inscrit</button>
         </div>
         <div class="card">
+          <div class="notice">💡 Cette liste se remplit automatiquement : le nom, le téléphone et l'email du parent sont saisis une seule fois, sur la fiche de l'élève (page "Élèves"). Utilisez "Modifier" ici seulement pour ajuster le frais mensuel d'un enfant ou regrouper des frères/sœurs sous un même parent.</div>
           <div class="filters"><input id="parentSearch" placeholder="Rechercher parent ou enfant…"></div>
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Parent/Tuteur</th><th>Téléphone</th><th>Email</th><th>Enfant(s)</th><th>Solde</th><th>Action</th></tr></thead>
@@ -479,7 +480,8 @@
     <div class="form-group"><label>Matricule</label><input id="fStudentMat" class="form-control" placeholder="Automatique"></div>
     <div class="form-group"><label>Classe *</label><select id="fStudentClass" class="form-control" required></select></div>
     <div class="form-group"><label>Parent / Tuteur *</label><input id="fStudentParent" class="form-control" required></div>
-    <div class="form-group"><label>Téléphone parent</label><input id="fStudentPhone" class="form-control"></div>
+    <div class="form-group"><label>Téléphone parent *</label><input id="fStudentPhone" class="form-control" required></div>
+    <div class="form-group full"><label>Email parent</label><input id="fStudentParentEmail" type="email" class="form-control" placeholder="Optionnel"></div>
     <div class="form-group full"><label>Frais mensuel (FCFA)</label><input id="fStudentFee" type="number" min="0" step="1" class="form-control" placeholder="Laisser vide pour utiliser le tarif de la classe"></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
 </div></div>
@@ -491,9 +493,9 @@
     <div class="form-group"><label>Téléphone *</label><input id="fParentPhone" class="form-control" required></div>
     <div class="form-group"><label>Email</label><input id="fParentEmail" class="form-control"></div>
     <div class="form-group full">
-      <label>Enfant(s) *</label>
-      <select id="fParentChildren" class="form-control" multiple size="4" required></select>
-      <small class="muted">Ctrl/Cmd + clic pour sélectionner plusieurs élèves.</small>
+      <label>Enfant(s) déjà inscrit(s)</label>
+      <select id="fParentChildren" class="form-control" multiple size="4"></select>
+      <small class="muted">Optionnel — normalement rempli automatiquement à l'inscription de l'élève. Ctrl/Cmd + clic pour sélectionner plusieurs.</small>
     </div>
     <div class="form-group full" id="fParentFeesWrap"></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
