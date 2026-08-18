@@ -162,7 +162,7 @@
           </div>
           <input id="importStudentsInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
           <div class="table-wrap">
-            <table class="table"><thead><tr><th>Matricule</th><th>Élève</th><th>Classe</th><th>Parent(s)</th><th>Téléphone</th><th>Statut</th><th>Action</th></tr></thead>
+            <table class="table"><thead><tr><th>Matricule</th><th>Élève</th><th>Classe</th><th>Parent(s)</th><th>Téléphone</th><th>Frais mensuel</th><th>Statut</th><th>Action</th></tr></thead>
             <tbody id="studentsBody"></tbody></table>
           </div>
         </div>
@@ -479,7 +479,8 @@
     <div class="form-group"><label>Matricule</label><input id="fStudentMat" class="form-control" placeholder="Automatique"></div>
     <div class="form-group"><label>Classe *</label><select id="fStudentClass" class="form-control" required></select></div>
     <div class="form-group"><label>Parent / Tuteur *</label><input id="fStudentParent" class="form-control" required></div>
-    <div class="form-group full"><label>Téléphone parent</label><input id="fStudentPhone" class="form-control"></div>
+    <div class="form-group"><label>Téléphone parent</label><input id="fStudentPhone" class="form-control"></div>
+    <div class="form-group full"><label>Frais mensuel (FCFA)</label><input id="fStudentFee" type="number" min="0" step="1" class="form-control" placeholder="Laisser vide pour utiliser le tarif de la classe"></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
 </div></div>
 
@@ -489,7 +490,12 @@
     <div class="form-group"><label>Nom complet *</label><input id="fParentName" class="form-control" required></div>
     <div class="form-group"><label>Téléphone *</label><input id="fParentPhone" class="form-control" required></div>
     <div class="form-group"><label>Email</label><input id="fParentEmail" class="form-control"></div>
-    <div class="form-group"><label>Enfant(s)</label><input id="fParentChildren" class="form-control" placeholder="Nom(s) élève(s)"></div>
+    <div class="form-group full">
+      <label>Enfant(s) *</label>
+      <select id="fParentChildren" class="form-control" multiple size="4" required></select>
+      <small class="muted">Ctrl/Cmd + clic pour sélectionner plusieurs élèves.</small>
+    </div>
+    <div class="form-group full" id="fParentFeesWrap"></div>
   </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
 </div></div>
 
