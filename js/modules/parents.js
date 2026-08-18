@@ -18,25 +18,12 @@ const el = (id) => document.getElementById(id);
 let editingId = null;
 
 export async function refresh() {
-  await listRows("parents", {
-    orderBy: "name",
-    ascending: true
-  });
-
-  if (!state.cache.students) {
-    await listRows("students");
-  }
-
-  if (!state.cache.classes) {
-    await listRows("classes");
-  }
-
-  if (!state.cache.payments) {
-    await listRows("payments");
-  }
-
+  await listRows("parents", { orderBy: "name", ascending: true });
+  if (!state.cache.students) await listRows("students");
+  if (!state.cache.classes) await listRows("classes");
   renderTable();
 }
+
 // Élèves liés à un parent : lien réel (parent_id) en priorité, avec repli
 // sur l'ancien texte libre "parent_name" pour les données existantes non
 // encore migrées.
@@ -178,11 +165,10 @@ export function mount() {
 
   el("parentForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    // Élève optionnel ici : un parent peut être créé avant d'inscrire son
+    // enfant. Dans le cas normal, c'est la fiche élève qui crée/lie le
+    // parent automatiquement (voir js/modules/students.js).
     const selectedIds = new Set([...(el("fParentChildren")?.selectedOptions || [])].map((o) => o.value));
-    if (!selectedIds.size) {
-      toast("Sélectionnez au moins un élève");
-      return;
-    }
     const payload = {
       name: el("fParentName").value.trim(),
       phone: el("fParentPhone").value.trim(),
