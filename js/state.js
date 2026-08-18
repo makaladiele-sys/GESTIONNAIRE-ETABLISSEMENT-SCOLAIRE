@@ -56,11 +56,17 @@ async function _loadProfileAndSchoolInner(userId) {
       .maybeSingle();
     if (sErr || !school) throw new Error("Établissement introuvable pour ce profil.");
     if (profile.role !== "platform_admin" && school.status !== "active") {
-      throw new Error(
-        "Votre établissement est en attente de validation par la plateforme. Vous serez averti dès l'activation."
-      );
-    }
-    state.school = school;
+
+  if (school.status === "suspended") {
+    throw new Error(
+      "Votre établissement a été suspendu par l'administrateur de la plateforme. Veuillez contacter la plateforme pour réactiver votre accès."
+    );
+  }
+
+  throw new Error(
+    "L'accès à votre établissement n'est pas actuellement disponible."
+  );
+}    state.school = school;
   } else {
     // Cas normal pour platform_admin : pas d'établissement rattaché.
     state.school = null;
@@ -133,4 +139,112 @@ export async function upsertRows(table, rows, onConflict) {
   const { data, error } = await sb.from(table).upsert(payload, { onConflict }).select();
   if (error) throw error;
   return data;
+}
+
+
+// --------------------------------------------------------------------------
+// Vérification périodique du statut de l'établissement
+// --------------------------------------------------------------------------
+
+let schoolStatusTimer = null;
+let schoolStatusChecking = false;
+
+export async function checkSchoolStatus() {
+  // Le Super Admin n'est pas rattaché à un établissement.
+  if (isPlatformAdmin()) return true;
+
+  if (!state.user?.id || !state.profile?.school_id) return true;
+
+  if (schoolStatusChecking) return true;
+
+  schoolStatusChecking = true;
+
+  try {
+    const sb = getSupabase();
+
+    const { data: school, error } = await sb
+      .from("schools")
+      .select("id, name, status")
+      .eq("id", state.profile.school_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Security] Vérification établissement :", error);
+      return true;
+    }
+
+    if (!school) {
+      await forceSchoolLogout(
+        "Votre établissement n'existe plus sur la plateforme."
+      );
+      return false;
+    }
+
+    if (school.status !== "active") {
+      const message =
+        school.status === "suspended"
+          ? "Votre établissement a été suspendu par l'administrateur de la plateforme. Veuillez contacter la plateforme."
+          : "L'accès à votre établissement n'est pas actuellement disponible.";
+
+      await forceSchoolLogout(message);
+      return false;
+    }
+
+    state.school = {
+      ...state.school,
+      ...school,
+    };
+
+    return true;
+
+  } catch (error) {
+    console.error("[Security] Exception vérification statut :", error);
+    return true;
+  } finally {
+    schoolStatusChecking = false;
+  }
+}
+
+async function forceSchoolLogout(message) {
+  const sb = getSupabase();
+
+  state.school = null;
+
+  try {
+    await sb.auth.signOut();
+  } catch (error) {
+    console.error("[Security] Erreur déconnexion :", error);
+  }
+
+  const box = document.getElementById("authError");
+
+  if (box) {
+    box.textContent = message;
+    box.classList.remove("ok");
+    box.style.display = "block";
+  }
+
+  document.body.classList.add("auth-locked");
+
+  const gate = document.getElementById("authGate");
+
+  if (gate) {
+    gate.style.display = "flex";
+  }
+}
+
+export function startSchoolStatusMonitor() {
+  stopSchoolStatusMonitor();
+
+  // Vérification toutes les 30 secondes
+  schoolStatusTimer = setInterval(() => {
+    checkSchoolStatus();
+  }, 30000);
+}
+
+export function stopSchoolStatusMonitor() {
+  if (schoolStatusTimer) {
+    clearInterval(schoolStatusTimer);
+    schoolStatusTimer = null;
+  }
 }
