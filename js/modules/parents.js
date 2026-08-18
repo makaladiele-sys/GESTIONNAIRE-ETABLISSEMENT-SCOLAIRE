@@ -18,12 +18,25 @@ const el = (id) => document.getElementById(id);
 let editingId = null;
 
 export async function refresh() {
-  await listRows("parents", { orderBy: "name", ascending: true });
-  if (!state.cache.students) await listRows("students");
-  if (!state.cache.classes) await listRows("classes");
+  await listRows("parents", {
+    orderBy: "name",
+    ascending: true
+  });
+
+  if (!state.cache.students) {
+    await listRows("students");
+  }
+
+  if (!state.cache.classes) {
+    await listRows("classes");
+  }
+
+  if (!state.cache.payments) {
+    await listRows("payments");
+  }
+
   renderTable();
 }
-
 // Élèves liés à un parent : lien réel (parent_id) en priorité, avec repli
 // sur l'ancien texte libre "parent_name" pour les données existantes non
 // encore migrées.
