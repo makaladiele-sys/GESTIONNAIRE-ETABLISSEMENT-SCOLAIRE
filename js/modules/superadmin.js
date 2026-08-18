@@ -264,29 +264,39 @@ async function _refreshInner() {
           `;
         }
 
-        let action = "";
+      let action = "";
 
-        if (school.status === STATUS.ACTIVE) {
-          action = `
-            <button
-              class="btn btn-light btn-sm"
-              data-status="suspended"
-              data-id="${escapeHtml(school.id)}"
-            >
-              ⛔ Suspendre
-            </button>
-          `;
-        } else {
-          action = `
-            <button
-              class="btn btn-primary btn-sm"
-              data-status="active"
-              data-id="${escapeHtml(school.id)}"
-            >
-              ✅ Activer
-            </button>
-          `;
-        }
+if (school.status === STATUS.ACTIVE) {
+  action = `
+    <button
+      class="btn btn-light btn-sm"
+      data-status="suspended"
+      data-id="${escapeHtml(school.id)}"
+    >
+      ⛔ Suspendre
+    </button>
+  `;
+} else {
+  action = `
+    <button
+      class="btn btn-primary btn-sm"
+      data-status="active"
+      data-id="${escapeHtml(school.id)}"
+    >
+      ✅ Activer
+    </button>
+  `;
+}
+
+action += `
+  <button
+    class="btn btn-light btn-sm"
+    data-delete-school="${escapeHtml(school.id)}"
+    style="margin-left:6px"
+  >
+    🗑️ Supprimer
+  </button>
+`;
 
         return `
           <tr>
@@ -335,7 +345,59 @@ async function _refreshInner() {
     `;
   }
 }
+// --------------------------------------------------------------------------
+// Supprimer définitivement un établissement
+// --------------------------------------------------------------------------
 
+async function deleteSchool(schoolId) {
+  if (!schoolId) {
+    toast("Établissement invalide.");
+    return;
+  }
+
+  const confirmation = window.confirm(
+    "⚠️ ATTENTION\n\n" +
+    "Voulez-vous vraiment supprimer définitivement cet établissement ?\n\n" +
+    "Cette opération est irréversible."
+  );
+
+  if (!confirmation) {
+    return;
+  }
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      throw new Error("Client Supabase indisponible.");
+    }
+
+    console.log("[SuperAdmin] Suppression de l'établissement :", schoolId);
+
+    const { error } = await sb
+      .from("schools")
+      .delete()
+      .eq("id", schoolId);
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur DELETE :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    toast("🗑️ Établissement supprimé.");
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception DELETE :", err);
+
+    toast(
+      "Erreur : " +
+      (err?.message || "Impossible de supprimer l'établissement.")
+    );
+  }
+}
 // --------------------------------------------------------------------------
 // Changer le statut d'un établissement
 // --------------------------------------------------------------------------
@@ -409,14 +471,33 @@ export function mount() {
   const body = el("superAdminBody");
 
   body?.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-status]");
-    if (!button) return;
 
-    const schoolId = button.dataset.id;
-    const newStatus = button.dataset.status;
+  // ------------------------------------------------------------
+  // Activer / suspendre
+  // ------------------------------------------------------------
+
+  const statusButton = event.target.closest("[data-status]");
+
+  if (statusButton) {
+    const schoolId = statusButton.dataset.id;
+    const newStatus = statusButton.dataset.status;
 
     await updateSchoolStatus(schoolId, newStatus);
-  });
+    return;
+  }
 
+  // ------------------------------------------------------------
+  // Supprimer
+  // ------------------------------------------------------------
+
+  const deleteButton = event.target.closest("[data-delete-school]");
+
+  if (deleteButton) {
+    const schoolId = deleteButton.dataset.deleteSchool;
+
+    await deleteSchool(schoolId);
+    return;
+  }
+});
   el("refreshSuperAdmin")?.addEventListener("click", refresh);
 }
