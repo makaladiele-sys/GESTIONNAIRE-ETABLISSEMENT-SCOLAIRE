@@ -264,7 +264,7 @@ async function _refreshInner() {
           `;
         }
 
-      let action = "";
+let action = "";
 
 if (school.status === STATUS.ACTIVE) {
   action = `
@@ -288,6 +288,17 @@ if (school.status === STATUS.ACTIVE) {
   `;
 }
 
+action += `
+  <button
+    class="btn btn-light btn-sm"
+    data-delete-school="true"
+    data-id="${escapeHtml(school.id)}"
+    data-name="${escapeHtml(school.name || "Établissement")}"
+    style="margin-left:6px;color:#b42318"
+  >
+    🗑️ Supprimer
+  </button>
+`;
 action += `
   <button
     class="btn btn-light btn-sm"
@@ -413,6 +424,65 @@ async function updateSchoolStatus(schoolId, newStatus) {
     return;
   }
 
+  const actionLabel =
+    newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
+
+  const confirmation = window.confirm(
+    `Voulez-vous vraiment ${actionLabel} cet établissement ?`
+  );
+
+  if (!confirmation) return;
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      toast("Client Supabase indisponible.");
+      return;
+    }
+
+    console.log("[SuperAdmin] Modification statut :", {
+      schoolId,
+      newStatus,
+    });
+
+    const { data, error } = await sb
+      .from("schools")
+      .update({ status: newStatus })
+      .eq("id", schoolId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur UPDATE :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    console.log("[SuperAdmin] Établissement modifié :", data);
+
+    toast(
+      newStatus === STATUS.ACTIVE
+        ? "✅ Établissement activé."
+        : "⛔ Établissement suspendu."
+    );
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception UPDATE :", err);
+
+    toast(
+      "Erreur : " +
+        (err?.message || "Impossible de modifier l'établissement.")
+    );
+  }
+}
+  if (![STATUS.ACTIVE, STATUS.SUSPENDED].includes(newStatus)) {
+    toast("Statut non autorisé.");
+    return;
+  }
+
   const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
 
   const confirmation = window.confirm(`Voulez-vous vraiment ${actionLabel} cet établissement ?`);
@@ -472,20 +542,27 @@ export function mount() {
 
   body?.addEventListener("click", async (event) => {
 
-  // ------------------------------------------------------------
-  // Activer / suspendre
-  // ------------------------------------------------------------
+  const deleteButton = event.target.closest(
+    "[data-delete-school]"
+  );
 
-  const statusButton = event.target.closest("[data-status]");
+  if (deleteButton) {
+    const schoolId = deleteButton.dataset.id;
+    const schoolName = deleteButton.dataset.name;
 
-  if (statusButton) {
-    const schoolId = statusButton.dataset.id;
-    const newStatus = statusButton.dataset.status;
-
-    await updateSchoolStatus(schoolId, newStatus);
+    await deleteSchool(schoolId, schoolName);
     return;
   }
 
+  const button = event.target.closest("[data-status]");
+
+  if (!button) return;
+
+  const schoolId = button.dataset.id;
+  const newStatus = button.dataset.status;
+
+  await updateSchoolStatus(schoolId, newStatus);
+});
   // ------------------------------------------------------------
   // Supprimer
   // ------------------------------------------------------------
