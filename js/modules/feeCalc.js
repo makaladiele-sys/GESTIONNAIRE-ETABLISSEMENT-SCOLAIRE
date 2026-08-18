@@ -1,44 +1,76 @@
 // ==========================================================================
-// Calcul partagé "attendu vs recouvré" — utilisé par Recouvrement ET
-// Facturation & Paiements, pour que les deux pages affichent toujours
-// exactement les mêmes chiffres (une seule source de vérité).
+// CALCUL FINANCIER — source unique pour Recouvrement, Parents et Paiements
 // ==========================================================================
+
 import { state } from "../state.js";
 
 export function monthsElapsed(enrolledOn) {
   if (!enrolledOn) return 1;
+
   const start = new Date(enrolledOn);
   const now = new Date();
-  const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
+
+  const months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth()) +
+    1;
+
   return Math.max(1, months);
 }
 
-// Retourne, pour chaque élève actif, ce qui est attendu (frais mensuel de
-// sa classe × mois écoulés depuis l'inscription) face à ce qui a été payé
-// (paiements motif "Scolarité" uniquement).
 export function computeCollectionsRows() {
-  const students = (state.cache.students || []).filter((s) => s.status === "Actif");
+  const students = (state.cache.students || []).filter(
+    (s) => s.status === "Actif"
+  );
+
   const classes = state.cache.classes || [];
   const payments = state.cache.payments || [];
 
   const feeByClass = {};
-  classes.forEach((c) => (feeByClass[c.name] = Number(c.monthly_fee) || 0));
 
+  classes.forEach((c) => {
+    feeByClass[c.name] = Number(c.monthly_fee) || 0;
+  });
+
+  // IMPORTANT :
+  // On utilise maintenant student_id et non student_name.
   const paidByStudent = {};
   const lastMethodByStudent = {};
+
   payments
     .filter((p) => p.reason === "Scolarité")
     .forEach((p) => {
-      paidByStudent[p.student_name] = (paidByStudent[p.student_name] || 0) + Number(p.amount_paid || 0);
-      if (!(p.student_name in lastMethodByStudent)) lastMethodByStudent[p.student_name] = p.method;
+      const studentId = p.student_id;
+
+      if (!studentId) return;
+
+      paidByStudent[studentId] =
+        (paidByStudent[studentId] || 0) +
+        Number(p.amount_paid || 0);
+
+      if (!(studentId in lastMethodByStudent)) {
+        lastMethodByStudent[studentId] = p.method;
+      }
     });
 
   return students.map((s) => {
-    const fee = feeByClass[s.class_name] || 0;
+
+    // Le tarif individuel de l'élève est prioritaire.
+    const individualFee = Number(s.monthly_fee) || 0;
+
+    // Sinon on prend le tarif de la classe.
+    const classFee = feeByClass[s.class_name] || 0;
+
+    const fee = individualFee > 0 ? individualFee : classFee;
+
     const months = monthsElapsed(s.enrolled_on);
+
     const expected = fee * months;
-    const paid = paidByStudent[s.name] || 0;
-    const remaining = expected - paid;
+
+    const paid = paidByStudent[s.id] || 0;
+
+    const remaining = Math.max(0, expected - paid);
+
     return {
       student: s,
       fee,
@@ -46,12 +78,16 @@ export function computeCollectionsRows() {
       expected,
       paid,
       remaining,
-      lastMethod: lastMethodByStudent[s.name] || null,
-      configured: fee > 0,
+      lastMethod: lastMethodByStudent[s.id] || null,
+      configured: fee > 0
     };
   });
 }
 
-export function collectionsRowFor(studentName) {
-  return computeCollectionsRows().find((r) => r.student.name === studentName) || null;
+export function collectionsRowFor(studentId) {
+  return (
+    computeCollectionsRows().find(
+      (r) => r.student.id === studentId
+    ) || null
+  );
 }
