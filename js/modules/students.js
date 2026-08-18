@@ -1,8 +1,16 @@
 // ==========================================================================
 // Élèves : liste, ajout, modification, suppression, import/export Excel.
+// --------------------------------------------------------------------------
+// C'est le parent qui inscrit l'élève : ses coordonnées (nom, téléphone,
+// email) et le frais mensuel sont donc saisis ICI, sur la fiche élève. La
+// fiche "Parents / Tuteurs" est ensuite alimentée AUTOMATIQUEMENT à partir
+// de ces informations (upsertParentForStudent ci-dessous) — pas besoin de
+// ressaisir le parent séparément. Le rapprochement se fait par numéro de
+// téléphone (identifiant le plus fiable), pour regrouper correctement les
+// frères et sœurs sous un même parent.
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
-import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
+import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
 let editingId = null;
@@ -15,9 +23,51 @@ function classOptions() {
 
 export async function refresh() {
   if (!state.cache.classes) await listRows("classes");
+  if (!state.cache.parents) await listRows("parents");
   const students = await listRows("students", { orderBy: "name", ascending: true });
   populateClassFilter();
   renderTable(students);
+}
+
+// Crée ou met à jour automatiquement le parent lié à un élève, à partir des
+// champs saisis sur la fiche élève. Retourne l'ID du parent (ou null si ni
+// nom ni téléphone n'ont été renseignés).
+async function upsertParentForStudent({ name, phone, email }, studentName) {
+  const cleanName = (name || "").trim();
+  const cleanPhone = (phone || "").trim();
+  const cleanEmail = (email || "").trim();
+  if (!cleanName && !cleanPhone) return null;
+
+  if (!state.cache.parents) await listRows("parents");
+  const parents = state.cache.parents;
+
+  // Le téléphone est l'identifiant le plus fiable pour regrouper les
+  // frères et sœurs sous le même parent (deux parents peuvent porter un
+  // nom identique, rarement le même numéro).
+  let match = cleanPhone ? parents.find((p) => p.phone && p.phone.trim() === cleanPhone) : null;
+  if (!match && cleanName) match = parents.find((p) => (p.name || "").trim().toLowerCase() === cleanName.toLowerCase());
+
+  if (match) {
+    const patch = {};
+    if (cleanName && cleanName !== match.name) patch.name = cleanName;
+    if (cleanPhone && cleanPhone !== match.phone) patch.phone = cleanPhone;
+    if (cleanEmail && cleanEmail !== match.email) patch.email = cleanEmail;
+    if (Object.keys(patch).length) {
+      const updated = await updateRow("parents", match.id, patch);
+      Object.assign(match, updated);
+    }
+    return match.id;
+  }
+
+  const created = await insertRow("parents", {
+    name: cleanName || "—",
+    phone: cleanPhone,
+    email: cleanEmail,
+    children: studentName || "",
+    balance: 0,
+  });
+  parents.push(created); // pour que les élèves suivants du même import se rattachent bien
+  return created.id;
 }
 
 function populateClassFilter() {
@@ -46,6 +96,7 @@ function renderTable(students) {
       <td>${escapeHtml(s.class_name || "—")}</td>
       <td>${escapeHtml(s.parent_name || "—")}</td>
       <td>${escapeHtml(s.phone || "—")}</td>
+      <td>${Number(s.monthly_fee) > 0 ? fmtMoney(s.monthly_fee, state.school?.currency) : '<span class="muted">Tarif classe</span>'}</td>
       <td><span class="badge ${s.status === "Actif" ? "green" : "orange"}">${escapeHtml(s.status)}</span></td>
       <td>
         <button class="btn btn-light btn-sm" data-edit="${s.id}">✏️</button>
@@ -53,7 +104,7 @@ function renderTable(students) {
       </td>
     </tr>`
       )
-      .join("") || `<tr><td colspan="7" class="empty">Aucun élève. Ajoutez-en un ou importez un fichier Excel.</td></tr>`;
+      .join("") || `<tr><td colspan="8" class="empty">Aucun élève. Ajoutez-en un ou importez un fichier Excel.</td></tr>`;
 }
 
 function resetForm() {
@@ -81,6 +132,8 @@ function fillForm(s) {
   el("fStudentClass").value = s.class_name || "";
   el("fStudentParent").value = s.parent_name || "";
   el("fStudentPhone").value = s.phone || "";
+  el("fStudentParentEmail") && (el("fStudentParentEmail").value = (state.cache.parents || []).find((p) => p.id === s.parent_id)?.email || "");
+  el("fStudentFee") && (el("fStudentFee").value = Number(s.monthly_fee) > 0 ? s.monthly_fee : "");
 }
 
 export function mount() {
@@ -116,22 +169,30 @@ export function mount() {
 
   el("studentForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const parentName = el("fStudentParent").value.trim();
+    const parentPhone = el("fStudentPhone").value.trim();
+    const parentEmail = el("fStudentParentEmail")?.value.trim() || "";
     const payload = {
       name: el("fStudentName").value.trim(),
       matricule: el("fStudentMat").value.trim() || undefined,
       class_name: el("fStudentClass").value,
-      parent_name: el("fStudentParent").value.trim(),
-      phone: el("fStudentPhone").value.trim(),
+      parent_name: parentName,
+      phone: parentPhone,
+      monthly_fee: el("fStudentFee")?.value ? Number(el("fStudentFee").value) : null,
       status: "Actif",
     };
     try {
+      // Le parent est créé/mis à jour automatiquement à partir de ces
+      // informations — pas besoin de le saisir séparément dans "Parents / Tuteurs".
+      payload.parent_id = await upsertParentForStudent({ name: parentName, phone: parentPhone, email: parentEmail }, payload.name);
+
       if (editingId) {
         await updateRow("students", editingId, payload);
-        toast("Élève mis à jour");
+        toast("Élève mis à jour — fiche parent synchronisée");
       } else {
         if (!payload.matricule) payload.matricule = "ELV-" + String(Date.now()).slice(-6);
         await insertRow("students", payload);
-        toast("Élève enregistré");
+        toast("Élève enregistré — fiche parent créée automatiquement");
       }
       closeModal("studentModal");
       resetForm();
@@ -147,8 +208,8 @@ export function mount() {
 
 function exportExcel() {
   const rows = [
-    ["Matricule", "Élève", "Classe", "Parent", "Téléphone", "Statut"],
-    ...(state.cache.students || []).map((s) => [s.matricule, s.name, s.class_name, s.parent_name, s.phone, s.status]),
+    ["Matricule", "Élève", "Classe", "Parent", "Téléphone", "Frais mensuel", "Statut"],
+    ...(state.cache.students || []).map((s) => [s.matricule, s.name, s.class_name, s.parent_name, s.phone, s.monthly_fee || "", s.status]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -167,13 +228,18 @@ function importExcel(file) {
     for (const r of rows) {
       const name = r["Élève"] || r["Eleve"] || r["Nom et prénom"] || r["Nom"];
       if (!name) continue;
+      const parentName = String(r["Parent"] || r["Tuteur"] || "");
+      const phone = String(r["Téléphone"] || r["Telephone"] || "");
       try {
+        const parentId = await upsertParentForStudent({ name: parentName, phone, email: String(r["Email parent"] || "") }, String(name));
         await insertRow("students", {
           matricule: String(r["Matricule"] || "ELV-" + String(Date.now() + count).slice(-6)),
           name: String(name),
           class_name: String(r["Classe"] || ""),
-          parent_name: String(r["Parent"] || r["Tuteur"] || ""),
-          phone: String(r["Téléphone"] || r["Telephone"] || ""),
+          parent_name: parentName,
+          phone,
+          parent_id: parentId,
+          monthly_fee: r["Frais mensuel"] ? Number(r["Frais mensuel"]) : null,
           status: "Actif",
         });
         count++;
