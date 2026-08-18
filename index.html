@@ -331,20 +331,7 @@
         </div>
         <div class="card">
           <div class="table-wrap">
-            <table class="table">
-  <thead>
-    <tr>
-      <th>Élève</th>
-      <th>Parent</th>
-      <th>Motif</th>
-      <th>Montant dû</th>
-      <th>Payé</th>
-      <th>Reste</th>
-      <th>Date</th>
-      <th>Statut</th>
-      <th>Reçu</th>
-    </tr>
-  </thead>
+            <table class="table"><thead><tr><th>Élève</th><th>Parent</th><th>Motif</th><th>Montant dû</th><th>Payé</th><th>Reste</th><th>Date</th><th>Statut</th><th>Reçu</th><th>Action</th></tr></thead>
             <tbody id="paymentsBody"></tbody></table>
           </div>
         </div>
@@ -588,9 +575,10 @@
 </div></div>
 
 <div class="modal" id="paymentModal"><div class="modal-box">
-  <div class="modal-head"><h3>Encaisser un paiement</h3><button class="close" data-close-modal>×</button></div>
+  <div class="modal-head"><h3 id="paymentModalTitle">Encaisser un paiement</h3><button class="close" data-close-modal>×</button></div>
   <form id="paymentForm"><div class="form-grid">
     <div class="form-group full"><label>Élève *</label><select id="fPayStudent" class="form-control" required></select></div>
+    <div class="form-group full" id="payParentLine"></div>
     <div class="form-group"><label>Motif</label>
       <select id="fPayReason" class="form-control"><option>Scolarité</option><option>Inscription</option><option>Cantine</option><option>Transport</option><option>Activité</option><option>Examen</option></select>
     </div>
