@@ -7,6 +7,8 @@
 <title>Gestion Scolaire Suite</title>
 <link rel="stylesheet" href="css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="auth-locked">
@@ -158,7 +160,8 @@
               <input id="studentSearch" placeholder="Rechercher nom, matricule…">
               <select id="classFilter"><option value="">Toutes les classes</option></select>
             </div>
-            <button class="btn btn-light" id="exportStudentsBtn">⬇ Exporter</button>
+            <button class="btn btn-light" id="exportStudentsExcel">⬇ Excel</button>
+            <button class="btn btn-light" id="exportStudentsWord">⬇ Word</button>
           </div>
           <input id="importStudentsInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
           <div class="table-wrap">
@@ -173,6 +176,8 @@
         <div class="page-head">
           <div><h2>Parents / Tuteurs</h2><p>Générée automatiquement à l'inscription des élèves — contacts, enfants liés et soldes.</p></div>
           <button class="btn btn-primary" id="openAddParent">＋ Parent sans élève inscrit</button>
+          <button class="btn btn-light" id="exportParentsExcel">⬇ Excel</button>
+          <button class="btn btn-light" id="exportParentsWord">⬇ Word</button>
         </div>
         <div class="card">
           <div class="notice">💡 Cette liste se remplit automatiquement : le nom, le téléphone et l'email du parent sont saisis une seule fois, sur la fiche de l'élève (page "Élèves"). Utilisez "Modifier" ici seulement pour ajuster le frais mensuel d'un enfant ou regrouper des frères/sœurs sous un même parent.</div>
@@ -322,7 +327,11 @@
       <div class="page" id="payments">
         <div class="page-head">
           <div><h2>Facturation & Paiements</h2><p>Mensualités, échéances et reçus.</p></div>
-          <button class="btn btn-primary" id="openAddPayment">＋ Encaisser un paiement</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" id="openAddPayment">＋ Encaisser un paiement</button>
+            <button class="btn btn-light" id="exportPaymentsExcel">⬇ Excel</button>
+            <button class="btn btn-light" id="exportPaymentsWord">⬇ Word</button>
+          </div>
         </div>
         <div class="notice">💡 Ces totaux (scolarité uniquement) sont calculés exactement comme dans <b>Recouvrement</b> — les deux pages affichent toujours les mêmes chiffres.</div>
         <div class="grid3">
@@ -342,6 +351,10 @@
       <div class="page" id="collections">
         <div class="page-head">
           <div><h2>Recouvrement</h2><p>Ce qui doit être recouvré (frais mensuel × mois écoulés depuis l'inscription) comparé à ce qui a réellement été payé, avec la liste nominative des retards.</p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-light" id="exportCollectionsExcel">⬇ Excel</button>
+            <button class="btn btn-light" id="exportCollectionsWord">⬇ Word</button>
+          </div>
         </div>
         <div class="notice warning" id="collectionsNotice" style="display:none"></div>
         <div class="stats">
