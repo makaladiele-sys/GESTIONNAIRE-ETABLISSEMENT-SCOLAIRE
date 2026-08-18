@@ -46,6 +46,7 @@ function renderTable(payments, currency) {
         const rest = Number(p.amount_due) - Number(p.amount_paid);
         const s = p.student_id ? studentById(p.student_id) : null;
         const parentName = s?.parent_name || "—";
+        const displayStatus = rest > 0 ? "Partiel" : p.status;
         return `<tr>
         <td>${escapeHtml(p.student_name)}</td>
         <td>${escapeHtml(parentName)}</td>
@@ -54,7 +55,7 @@ function renderTable(payments, currency) {
         <td>${fmtMoney(p.amount_paid, currency)}</td>
         <td>${fmtMoney(rest, currency)}</td>
         <td>${escapeHtml(p.payment_date || "—")}</td>
-        <td><span class="badge ${p.status === "Payé" ? "green" : rest > 0 ? "orange" : "green"}">${escapeHtml(p.status)}</span></td>
+        <td><span class="badge ${rest > 0 ? "orange" : "green"}">${escapeHtml(displayStatus)}</span></td>
         <td><button class="btn btn-light btn-sm" data-receipt="${p.id}">🧾 Reçu</button></td>
         <td>
           <button class="btn btn-light btn-sm" data-edit="${p.id}">✏️</button>
@@ -179,15 +180,27 @@ export function mount() {
       toast("Sélectionnez un élève");
       return;
     }
-    const amount = Number(el("fPayAmount").value) || 0;
+    const reason = el("fPayReason").value;
+    const amountPaid = Number(el("fPayAmount").value) || 0;
+
+    // "Montant dû" = la mensualité convenue à l'inscription (frais propre à
+    // l'élève, sinon celui de sa classe) — PAS le montant réellement payé.
+    // Ainsi, un paiement partiel (ex: 3 000 F payés sur 5 000 F dus) affiche
+    // bien un "Reste" de 2 000 F au lieu de 0.
+    let amountDue = amountPaid;
+    if (reason === "Scolarité") {
+      const row = computeCollectionsRows().find((r) => r.student.id === studentId);
+      amountDue = row && row.fee > 0 ? row.fee : amountPaid;
+    }
+
     const payload = {
       student_id: studentId,
       student_name: s.name,
-      reason: el("fPayReason").value,
-      amount_due: amount,
-      amount_paid: amount,
+      reason,
+      amount_due: amountDue,
+      amount_paid: amountPaid,
       method: el("fPayMethod").value,
-      status: "Payé",
+      status: amountPaid >= amountDue ? "Payé" : "Partiel",
     };
     try {
       if (editingId) {
