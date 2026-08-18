@@ -69,8 +69,25 @@ async function loadContextAndEnter(session) {
     state.session = session;
     state.user = session.user;
     await loadProfileAndSchool(session.user.id);
-    unlockGate();
-    onAuthenticated();
+
+// Vérifier le statut de l'établissement
+if (state.school?.status === "suspended") {
+  const sb = getSupabase();
+
+  await sb.auth.signOut();
+
+  lockGate();
+  showSignupView(false);
+
+  showError(
+    "Votre établissement est actuellement suspendu. Veuillez contacter l'administrateur de la plateforme."
+  );
+
+  return;
+}
+
+unlockGate();
+onAuthenticated();
   } catch (e) {
     const sb = getSupabase();
     try {
@@ -165,7 +182,7 @@ export function initAuth() {
         name: schoolName,
         email,
         phone,
-        status: "pending",
+       status: "active",
       });
       if (schoolErr) throw schoolErr;
 
@@ -178,10 +195,10 @@ export function initAuth() {
       });
       if (signUpErr) throw signUpErr;
 
-      el("authSignupSuccess") &&
-        ((el("authSignupSuccess").style.display = "block"),
-        (el("authSignupSuccess").innerHTML =
-          "✓ Votre demande a été envoyée. Un administrateur de la plateforme va valider votre établissement avant l'activation de votre accès."));
+el("authSignupSuccess") &&
+  ((el("authSignupSuccess").style.display = "block"),
+  (el("authSignupSuccess").innerHTML =
+    "✓ Votre établissement a été créé avec succès. Vous pouvez maintenant accéder à l'application."));
       ["authSignupSchoolName", "authSignupEmail", "authSignupPhone", "authSignupPassword"].forEach((id) => {
         if (el(id)) el(id).value = "";
       });
