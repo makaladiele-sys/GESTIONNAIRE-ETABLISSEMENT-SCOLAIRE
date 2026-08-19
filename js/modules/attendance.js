@@ -1,144 +1,436 @@
 // ==========================================================================
-// Présences & assiduité — appel élève par élève, avec liste des absents
-// consultable par jour et par classe.
+// Super Admin plateforme : gestion des établissements
+//
+// Rôles concernés : platform_admin
+//
+// Fonctionnalités :
+// - Affichage de tous les établissements
+// - Compteurs : total / attente / actifs / suspendus
+// - Activation d'un établissement
+// - Suspension d'un établissement
+// - Suppression d'un établissement
+// - Actualisation après chaque action
+// - Gestion détaillée des erreurs Supabase
 // ==========================================================================
-import { listRows, upsertRows, state } from "../state.js";
-import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
+
+import { getSupabase } from "../supabaseClient.js";
+import { toast, escapeHtml } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
-const today = () => new Date().toISOString().slice(0, 10);
 
-function classNames() {
-  const classes = state.cache.classes || [];
-  if (classes.length) return classes.map((c) => c.name);
-  return [...new Set((state.cache.students || []).map((s) => s.class_name).filter(Boolean))];
-}
+// --------------------------------------------------------------------------
+// Configuration
+// --------------------------------------------------------------------------
+
+const STATUS = {
+  PENDING: "pending",
+  ACTIVE: "active",
+  SUSPENDED: "suspended",
+};
+
+// --------------------------------------------------------------------------
+// Rafraîchir les établissements
+// --------------------------------------------------------------------------
+
+// Empêche plusieurs refresh() concurrents de partir en parallèle et de se
+// marcher dessus (cause du 0 / 14 / 0 observé quand auth.js déclenchait
+// plusieurs fois onAuthenticated()).
+let _refreshPromise = null;
 
 export async function refresh() {
-  if (!state.cache.students) await listRows("students");
-  if (!state.cache.classes) await listRows("classes");
-  if (el("fAttFilterDate") && !el("fAttFilterDate").value) el("fAttFilterDate").value = today();
-  populateClassFilter();
-  await loadRecordsAndRender();
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = _refreshInner().finally(() => {
+    _refreshPromise = null;
+  });
+  return _refreshPromise;
 }
 
-function populateClassFilter() {
-  const sel = el("attClassFilter");
-  if (!sel) return;
-  const names = classNames();
-  const current = sel.value;
-  sel.innerHTML = `<option value="">Toutes les classes</option>` + names.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
-  if (names.includes(current)) sel.value = current;
-}
+async function _refreshInner() {
+  const body = el("superAdminBody");
+  const stats = el("superAdminStats");
 
-async function loadRecordsAndRender() {
-  const date = el("fAttFilterDate")?.value || today();
-  const records = await listRows("attendance_records", { orderBy: "student_name", ascending: true, filters: { date } });
-  renderTable(records, date);
-}
-
-function renderTable(records) {
-  const all = records || state.cache.attendance_records || [];
-  const classFilter = el("attClassFilter")?.value || "";
-  const statusFilter = el("attStatusFilter")?.value ?? "Absent";
-
-  const present = all.filter((r) => r.status === "Présent").length;
-  const absent = all.filter((r) => r.status === "Absent").length;
-  const late = all.filter((r) => r.status === "Retard").length;
-  el("attPresent") && (el("attPresent").textContent = present);
-  el("attAbsent") && (el("attAbsent").textContent = absent);
-  el("attLate") && (el("attLate").textContent = late);
-
-  const rows = all.filter((r) => (!classFilter || r.class_name === classFilter) && (!statusFilter || r.status === statusFilter));
-
-  el("attendanceBody").innerHTML =
-    rows
-      .map(
-        (r) => `<tr>
-      <td><b>${escapeHtml(r.student_name)}</b></td>
-      <td>${escapeHtml(r.class_name)}</td>
-      <td><span class="badge ${r.status === "Présent" ? "green" : r.status === "Retard" ? "orange" : "red"}">${escapeHtml(r.status)}</span></td>
-      <td>${escapeHtml(r.date)}</td>
-    </tr>`
-      )
-      .join("") ||
-    `<tr><td colspan="4" class="empty">${
-      all.length === 0 ? "Aucun appel n'a encore été fait pour cette date." : "Aucun élève avec ce statut pour ce filtre."
-    }</td></tr>`;
-}
-
-function renderRollCallList(className, existing) {
-  const students = (state.cache.students || []).filter((s) => s.class_name === className);
-  const byName = {};
-  (existing || []).forEach((r) => (byName[r.student_name] = r.status));
-
-  el("rollCallList").innerHTML = students.length
-    ? `<table class="table"><thead><tr><th>Élève</th><th>Statut</th></tr></thead><tbody>` +
-      students
-        .map((s) => {
-          const current = byName[s.name] || "Présent";
-          return `<tr>
-          <td>${escapeHtml(s.name)}</td>
-          <td>
-            <select class="form-control roll-status" data-name="${escapeHtml(s.name)}">
-              <option value="Présent" ${current === "Présent" ? "selected" : ""}>Présent</option>
-              <option value="Absent" ${current === "Absent" ? "selected" : ""}>Absent</option>
-              <option value="Retard" ${current === "Retard" ? "selected" : ""}>Retard</option>
-            </select>
-          </td>
-        </tr>`;
-        })
-        .join("") +
-      `</tbody></table>`
-    : `<div class="empty">Aucun élève dans cette classe pour le moment.</div>`;
-}
-
-async function loadRollCall() {
-  const className = el("fRollClass").value;
-  const date = el("fRollDate").value || today();
-  if (!className) {
-    el("rollCallList").innerHTML = `<div class="empty">Choisissez une classe.</div>`;
+  if (!body) {
+    console.error("[SuperAdmin] Élément #superAdminBody introuvable.");
     return;
   }
-  const existing = await listRows("attendance_records", { filters: { date, class_name: className } });
-  renderRollCallList(className, existing);
+
+  body.innerHTML = `
+    <tr>
+      <td colspan="6" class="empty">
+        Chargement des établissements…
+      </td>
+    </tr>
+  `;
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      throw new Error("Client Supabase indisponible.");
+    }
+
+    // Force la résolution complète de la session AVANT d'interroger
+    // "schools" (protégée par RLS pour platform_admin). Sans ça, la
+    // requête peut partir avec un token pas encore attaché -> RLS
+    // renvoie 0 ligne, silencieusement (pas d'erreur, tableau vide).
+    await sb.auth.getSession();
+
+    console.log("[SuperAdmin] Chargement de la table schools…");
+
+    const { data, error } = await sb
+      .from("schools")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur Supabase :", error);
+
+      body.innerHTML = `
+        <tr>
+          <td colspan="6" class="empty">
+            <b>Erreur de chargement</b><br>
+            ${escapeHtml(error.message)}
+          </td>
+        </tr>
+      `;
+
+      if (stats) {
+        stats.innerHTML = `
+          <div class="stat">
+            <div>
+              <div class="label">Établissements</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">🏫</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">En attente</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">⏳</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">Actifs</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">✅</div>
+          </div>
+
+          <div class="stat">
+            <div>
+              <div class="label">Suspendus</div>
+              <div class="value">—</div>
+            </div>
+            <div class="stat-icon">⛔</div>
+          </div>
+        `;
+      }
+
+      return;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+
+    console.log(`[SuperAdmin] ${rows.length} établissement(s) récupéré(s).`, rows);
+
+    // ----------------------------------------------------------------------
+    // Statistiques
+    // ----------------------------------------------------------------------
+
+    const pending = rows.filter((s) => s.status === STATUS.PENDING).length;
+    const active = rows.filter((s) => s.status === STATUS.ACTIVE).length;
+    const suspended = rows.filter((s) => s.status === STATUS.SUSPENDED).length;
+
+    if (stats) {
+      stats.innerHTML = `
+        <div class="stat">
+          <div>
+            <div class="label">Établissements</div>
+            <div class="value">${rows.length}</div>
+          </div>
+          <div class="stat-icon">🏫</div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">En attente</div>
+            <div class="value">${pending}</div>
+          </div>
+          <div class="stat-icon">⏳</div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">Actifs</div>
+            <div class="value">${active}</div>
+          </div>
+          <div class="stat-icon">✅</div>
+        </div>
+
+        <div class="stat">
+          <div>
+            <div class="label">Suspendus</div>
+            <div class="value">${suspended}</div>
+          </div>
+          <div class="stat-icon">⛔</div>
+        </div>
+      `;
+    }
+
+    // ----------------------------------------------------------------------
+    // Aucun établissement
+    // ----------------------------------------------------------------------
+
+    if (!rows.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="6" class="empty">
+            Aucun établissement inscrit pour le moment.
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+    // ----------------------------------------------------------------------
+    // Tableau
+    // ----------------------------------------------------------------------
+
+    body.innerHTML = rows
+      .map((school) => {
+        const created = school.created_at
+          ? new Date(school.created_at).toLocaleDateString("fr-FR")
+          : "—";
+
+        let statusBadge = "";
+
+        if (school.status === STATUS.ACTIVE) {
+          statusBadge = `<span class="badge green">Actif</span>`;
+        } else if (school.status === STATUS.SUSPENDED) {
+          statusBadge = `<span class="badge red">Suspendu</span>`;
+        } else {
+          statusBadge = `<span class="badge orange">En attente</span>`;
+        }
+
+        let action = "";
+
+        if (school.status === STATUS.ACTIVE) {
+          action = `
+            <button
+              class="btn btn-light btn-sm"
+              data-status="suspended"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ⛔ Suspendre
+            </button>
+          `;
+        } else {
+          action = `
+            <button
+              class="btn btn-primary btn-sm"
+              data-status="active"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ✅ Activer
+            </button>
+          `;
+        }
+
+        action += `
+          <button
+            class="btn btn-light btn-sm"
+            data-delete-school="${escapeHtml(school.id)}"
+            data-name="${escapeHtml(school.name || "Établissement")}"
+            style="margin-left:6px;color:#b42318"
+          >
+            🗑️ Supprimer
+          </button>
+        `;
+
+        return `
+          <tr>
+            <td><b>${escapeHtml(school.name || "—")}</b></td>
+            <td>${escapeHtml(school.email || "—")}</td>
+            <td>${escapeHtml(school.phone || "—")}</td>
+            <td>${created}</td>
+            <td>${statusBadge}</td>
+            <td>${action}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception :", err);
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty">
+          <b>Erreur inattendue</b><br>
+          ${escapeHtml(err?.message || "Impossible de charger les établissements.")}
+        </td>
+      </tr>
+    `;
+  }
 }
 
-export function mount() {
-  el("fAttFilterDate")?.addEventListener("change", loadRecordsAndRender);
-  el("attClassFilter")?.addEventListener("change", () => renderTable());
-  el("attStatusFilter")?.addEventListener("change", () => renderTable());
+// --------------------------------------------------------------------------
+// Supprimer définitivement un établissement
+// --------------------------------------------------------------------------
 
-  el("openAddAttendance")?.addEventListener("click", () => {
-    el("fRollClass") && (el("fRollClass").innerHTML = classNames().map((n) => `<option>${escapeHtml(n)}</option>`).join(""));
-    el("fRollDate") && (el("fRollDate").value = el("fAttFilterDate")?.value || today());
-    openModal("attendanceModal");
-    loadRollCall();
-  });
+async function deleteSchool(schoolId, schoolName) {
+  if (!schoolId) {
+    toast("Établissement invalide.");
+    return;
+  }
 
-  el("fRollClass")?.addEventListener("change", loadRollCall);
-  el("fRollDate")?.addEventListener("change", loadRollCall);
+  const confirmation = window.confirm(
+    "⚠️ ATTENTION\n\n" +
+    `Voulez-vous vraiment supprimer définitivement "${schoolName || "cet établissement"}" ?\n\n` +
+    "Cette opération est irréversible."
+  );
 
-  el("saveRollCallBtn")?.addEventListener("click", async () => {
-    const className = el("fRollClass").value;
-    const date = el("fRollDate").value || today();
-    if (!className) return toast("Choisissez une classe.");
-    const selects = document.querySelectorAll("#rollCallList .roll-status");
-    if (!selects.length) return toast("Aucun élève à enregistrer dans cette classe.");
-    const rows = Array.from(selects).map((sel) => ({
-      student_name: sel.dataset.name,
-      class_name: className,
-      date,
-      status: sel.value,
-    }));
-    try {
-      await upsertRows("attendance_records", rows, "school_id,student_name,date");
-      toast("Appel enregistré (" + rows.length + " élève(s))");
-      closeModal("attendanceModal");
-      el("fAttFilterDate") && (el("fAttFilterDate").value = date);
-      await loadRecordsAndRender();
-    } catch (err) {
-      toast("Erreur : " + err.message);
+  if (!confirmation) return;
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      throw new Error("Client Supabase indisponible.");
     }
+
+    console.log("[SuperAdmin] Suppression de l'établissement :", schoolId);
+
+    const { error } = await sb
+      .from("schools")
+      .delete()
+      .eq("id", schoolId);
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur DELETE :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    toast("🗑️ Établissement supprimé.");
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception DELETE :", err);
+
+    toast(
+      "Erreur : " +
+      (err?.message || "Impossible de supprimer l'établissement.")
+    );
+  }
+}
+
+// --------------------------------------------------------------------------
+// Changer le statut d'un établissement
+// --------------------------------------------------------------------------
+
+async function updateSchoolStatus(schoolId, newStatus) {
+  if (!schoolId || !newStatus) {
+    toast("Informations d'établissement invalides.");
+    return;
+  }
+
+  if (![STATUS.ACTIVE, STATUS.SUSPENDED].includes(newStatus)) {
+    toast("Statut non autorisé.");
+    return;
+  }
+
+  const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
+
+  const confirmation = window.confirm(
+    `Voulez-vous vraiment ${actionLabel} cet établissement ?`
+  );
+
+  if (!confirmation) return;
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      toast("Client Supabase indisponible.");
+      return;
+    }
+
+    console.log("[SuperAdmin] Modification statut :", { schoolId, newStatus });
+
+    const { data, error } = await sb
+      .from("schools")
+      .update({ status: newStatus })
+      .eq("id", schoolId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur UPDATE :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    console.log("[SuperAdmin] Établissement modifié :", data);
+
+    toast(
+      newStatus === STATUS.ACTIVE
+        ? "✅ Établissement activé."
+        : "⛔ Établissement suspendu."
+    );
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception UPDATE :", err);
+
+    toast(
+      "Erreur : " +
+        (err?.message || "Impossible de modifier l'établissement.")
+    );
+  }
+}
+
+// --------------------------------------------------------------------------
+// Montage
+// --------------------------------------------------------------------------
+
+// Empêche mount() d'attacher deux fois les mêmes écouteurs si la vue Super
+// Admin est montée plusieurs fois.
+let _mounted = false;
+
+export function mount() {
+  if (_mounted) return;
+  _mounted = true;
+
+  const body = el("superAdminBody");
+
+  body?.addEventListener("click", async (event) => {
+    const deleteButton = event.target.closest("[data-delete-school]");
+
+    if (deleteButton) {
+      const schoolId = deleteButton.dataset.deleteSchool;
+      const schoolName = deleteButton.dataset.name;
+
+      await deleteSchool(schoolId, schoolName);
+      return;
+    }
+
+    const button = event.target.closest("[data-status]");
+
+    if (!button) return;
+
+    const schoolId = button.dataset.id;
+    const newStatus = button.dataset.status;
+
+    await updateSchoolStatus(schoolId, newStatus);
   });
+
+  el("refreshSuperAdmin")?.addEventListener("click", refresh);
 }
