@@ -181,17 +181,19 @@ export function initAuth() {
     if (password.length < 8) return showError("Le mot de passe doit contenir au moins 8 caractères.");
     try {
       setBusy(true);
-      // 1) Créer l'établissement, statut "pending" (en attente de validation superadmin).
-      const newSchoolId = crypto.randomUUID();
-      const { error: schoolErr } = await sb.from("schools").insert({
-        id: newSchoolId,
-        name: schoolName,
-        email,
-        phone,
-        status: "pending",
-      });
-      if (schoolErr) throw schoolErr;
+      // 1) Créer l'établissement, actif immédiatement après inscription.
 
+const newSchoolId = crypto.randomUUID();
+
+const { error: schoolErr } = await sb.from("schools").insert({
+  id: newSchoolId,
+  name: schoolName,
+  email,
+  phone,
+  status: "active",
+});
+
+if (schoolErr) throw schoolErr;
       // 2) Créer le compte administrateur ; le trigger SQL handle_new_school_admin()
       //    lit school_id dans les métadonnées et crée automatiquement le profil.
       const { error: signUpErr } = await sb.auth.signUp({
