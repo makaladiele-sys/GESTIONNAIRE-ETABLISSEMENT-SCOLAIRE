@@ -8,6 +8,7 @@
 // - Compteurs : total / attente / actifs / suspendus
 // - Activation d'un établissement
 // - Suspension d'un établissement
+// - Suppression d'un établissement
 // - Actualisation après chaque action
 // - Gestion détaillée des erreurs Supabase
 // ==========================================================================
@@ -144,74 +145,38 @@ async function _refreshInner() {
     const active = rows.filter((s) => s.status === STATUS.ACTIVE).length;
     const suspended = rows.filter((s) => s.status === STATUS.SUSPENDED).length;
 
-    // ----------------------------------------------------------------------
-    // Affichage des statistiques
-    // ----------------------------------------------------------------------
-
     if (stats) {
       stats.innerHTML = `
         <div class="stat">
           <div>
-            <div class="label">
-              Établissements
-            </div>
-
-            <div class="value">
-              ${rows.length}
-            </div>
+            <div class="label">Établissements</div>
+            <div class="value">${rows.length}</div>
           </div>
-
-          <div class="stat-icon">
-            🏫
-          </div>
+          <div class="stat-icon">🏫</div>
         </div>
 
         <div class="stat">
           <div>
-            <div class="label">
-              En attente
-            </div>
-
-            <div class="value">
-              ${pending}
-            </div>
+            <div class="label">En attente</div>
+            <div class="value">${pending}</div>
           </div>
-
-          <div class="stat-icon">
-            ⏳
-          </div>
+          <div class="stat-icon">⏳</div>
         </div>
 
         <div class="stat">
           <div>
-            <div class="label">
-              Actifs
-            </div>
-
-            <div class="value">
-              ${active}
-            </div>
+            <div class="label">Actifs</div>
+            <div class="value">${active}</div>
           </div>
-
-          <div class="stat-icon">
-            ✅
-          </div>
+          <div class="stat-icon">✅</div>
         </div>
 
         <div class="stat">
           <div>
-            <div class="label">
-              Suspendus
-            </div>
-
-            <div class="value">
-              ${suspended}
-            </div>
+            <div class="label">Suspendus</div>
+            <div class="value">${suspended}</div>
           </div>
-
-          <div class="stat-icon">
-            ⛔
-          </div>
+          <div class="stat-icon">⛔</div>
         </div>
       `;
     }
@@ -245,99 +210,56 @@ async function _refreshInner() {
         let statusBadge = "";
 
         if (school.status === STATUS.ACTIVE) {
-          statusBadge = `
-            <span class="badge green">
-              Actif
-            </span>
-          `;
+          statusBadge = `<span class="badge green">Actif</span>`;
         } else if (school.status === STATUS.SUSPENDED) {
-          statusBadge = `
-            <span class="badge red">
-              Suspendu
-            </span>
+          statusBadge = `<span class="badge red">Suspendu</span>`;
+        } else {
+          statusBadge = `<span class="badge orange">En attente</span>`;
+        }
+
+        let action = "";
+
+        if (school.status === STATUS.ACTIVE) {
+          action = `
+            <button
+              class="btn btn-light btn-sm"
+              data-status="suspended"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ⛔ Suspendre
+            </button>
           `;
         } else {
-          statusBadge = `
-            <span class="badge orange">
-              En attente
-            </span>
+          action = `
+            <button
+              class="btn btn-primary btn-sm"
+              data-status="active"
+              data-id="${escapeHtml(school.id)}"
+            >
+              ✅ Activer
+            </button>
           `;
         }
 
-let action = "";
-
-if (school.status === STATUS.ACTIVE) {
-  action = `
-    <button
-      class="btn btn-light btn-sm"
-      data-status="suspended"
-      data-id="${escapeHtml(school.id)}"
-    >
-      ⛔ Suspendre
-    </button>
-  `;
-} else {
-  action = `
-    <button
-      class="btn btn-primary btn-sm"
-      data-status="active"
-      data-id="${escapeHtml(school.id)}"
-    >
-      ✅ Activer
-    </button>
-  `;
-}
-
-action += `
-  <button
-    class="btn btn-light btn-sm"
-    data-delete-school="true"
-    data-id="${escapeHtml(school.id)}"
-    data-name="${escapeHtml(school.name || "Établissement")}"
-    style="margin-left:6px;color:#b42318"
-  >
-    🗑️ Supprimer
-  </button>
-`;
-action += `
-  <button
-    class="btn btn-light btn-sm"
-    data-delete-school="${escapeHtml(school.id)}"
-    style="margin-left:6px"
-  >
-    🗑️ Supprimer
-  </button>
-`;
+        action += `
+          <button
+            class="btn btn-light btn-sm"
+            data-delete-school="${escapeHtml(school.id)}"
+            data-name="${escapeHtml(school.name || "Établissement")}"
+            style="margin-left:6px;color:#b42318"
+          >
+            🗑️ Supprimer
+          </button>
+        `;
 
         return `
           <tr>
-
-            <td>
-              <b>
-                ${escapeHtml(school.name || "—")}
-              </b>
-            </td>
-
-            <td>
-              ${escapeHtml(school.email || "—")}
-            </td>
-
-            <td>
-              ${escapeHtml(school.phone || "—")}
-            </td>
-
-            <td>
-              ${created}
-            </td>
-
-            <td>
-              ${statusBadge}
-            </td>
-
-            <td>
-              ${action}
-            </td>
-
+            <td><b>${escapeHtml(school.name || "—")}</b></td>
+            <td>${escapeHtml(school.email || "—")}</td>
+            <td>${escapeHtml(school.phone || "—")}</td>
+            <td>${created}</td>
+            <td>${statusBadge}</td>
+            <td>${action}</td>
           </tr>
         `;
       })
@@ -356,11 +278,12 @@ action += `
     `;
   }
 }
+
 // --------------------------------------------------------------------------
 // Supprimer définitivement un établissement
 // --------------------------------------------------------------------------
 
-async function deleteSchool(schoolId) {
+async function deleteSchool(schoolId, schoolName) {
   if (!schoolId) {
     toast("Établissement invalide.");
     return;
@@ -368,13 +291,11 @@ async function deleteSchool(schoolId) {
 
   const confirmation = window.confirm(
     "⚠️ ATTENTION\n\n" +
-    "Voulez-vous vraiment supprimer définitivement cet établissement ?\n\n" +
+    `Voulez-vous vraiment supprimer définitivement "${schoolName || "cet établissement"}" ?\n\n` +
     "Cette opération est irréversible."
   );
 
-  if (!confirmation) {
-    return;
-  }
+  if (!confirmation) return;
 
   try {
     const sb = getSupabase();
@@ -409,6 +330,7 @@ async function deleteSchool(schoolId) {
     );
   }
 }
+
 // --------------------------------------------------------------------------
 // Changer le statut d'un établissement
 // --------------------------------------------------------------------------
@@ -424,8 +346,7 @@ async function updateSchoolStatus(schoolId, newStatus) {
     return;
   }
 
-  const actionLabel =
-    newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
+  const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
 
   const confirmation = window.confirm(
     `Voulez-vous vraiment ${actionLabel} cet établissement ?`
@@ -441,10 +362,7 @@ async function updateSchoolStatus(schoolId, newStatus) {
       return;
     }
 
-    console.log("[SuperAdmin] Modification statut :", {
-      schoolId,
-      newStatus,
-    });
+    console.log("[SuperAdmin] Modification statut :", { schoolId, newStatus });
 
     const { data, error } = await sb
       .from("schools")
@@ -478,53 +396,6 @@ async function updateSchoolStatus(schoolId, newStatus) {
     );
   }
 }
-  if (![STATUS.ACTIVE, STATUS.SUSPENDED].includes(newStatus)) {
-    toast("Statut non autorisé.");
-    return;
-  }
-
-  const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
-
-  const confirmation = window.confirm(`Voulez-vous vraiment ${actionLabel} cet établissement ?`);
-
-  if (!confirmation) {
-    return;
-  }
-
-  try {
-    const sb = getSupabase();
-
-    console.log("[SuperAdmin] Modification statut :", { schoolId, newStatus });
-
-    const { data, error } = await sb
-      .from("schools")
-      .update({ status: newStatus })
-      .eq("id", schoolId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("[SuperAdmin] Erreur UPDATE :", error);
-      toast("Erreur : " + error.message);
-      return;
-    }
-
-    console.log("[SuperAdmin] Établissement modifié :", data);
-
-    if (newStatus === STATUS.ACTIVE) {
-      toast("✅ Établissement activé.");
-    } else {
-      toast("⛔ Établissement suspendu.");
-    }
-
-    await refresh();
-
-  } catch (err) {
-    console.error("[SuperAdmin] Exception UPDATE :", err);
-
-    toast("Erreur : " + (err?.message || "Impossible de modifier l'établissement."));
-  }
-}
 
 // --------------------------------------------------------------------------
 // Montage
@@ -541,40 +412,25 @@ export function mount() {
   const body = el("superAdminBody");
 
   body?.addEventListener("click", async (event) => {
+    const deleteButton = event.target.closest("[data-delete-school]");
 
-  const deleteButton = event.target.closest(
-    "[data-delete-school]"
-  );
+    if (deleteButton) {
+      const schoolId = deleteButton.dataset.deleteSchool;
+      const schoolName = deleteButton.dataset.name;
 
-  if (deleteButton) {
-    const schoolId = deleteButton.dataset.id;
-    const schoolName = deleteButton.dataset.name;
+      await deleteSchool(schoolId, schoolName);
+      return;
+    }
 
-    await deleteSchool(schoolId, schoolName);
-    return;
-  }
+    const button = event.target.closest("[data-status]");
 
-  const button = event.target.closest("[data-status]");
+    if (!button) return;
 
-  if (!button) return;
+    const schoolId = button.dataset.id;
+    const newStatus = button.dataset.status;
 
-  const schoolId = button.dataset.id;
-  const newStatus = button.dataset.status;
+    await updateSchoolStatus(schoolId, newStatus);
+  });
 
-  await updateSchoolStatus(schoolId, newStatus);
-});
-  // ------------------------------------------------------------
-  // Supprimer
-  // ------------------------------------------------------------
-
-  const deleteButton = event.target.closest("[data-delete-school]");
-
-  if (deleteButton) {
-    const schoolId = deleteButton.dataset.deleteSchool;
-
-    await deleteSchool(schoolId);
-    return;
-  }
-});
   el("refreshSuperAdmin")?.addEventListener("click", refresh);
 }
