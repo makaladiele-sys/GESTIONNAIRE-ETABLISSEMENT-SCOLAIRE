@@ -1,0 +1,71 @@
+/* ==========================================================================
+   Reçu de paiement imprimable
+   ========================================================================== */
+
+.receipt {
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #12172b;
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 8px 4px;
+}
+.receipt-head {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.receipt-school {
+  font-size: 15px;
+  display: block;
+  margin-bottom: 2px;
+}
+.receipt-title {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 10px 0;
+  border-top: 1px dashed #999;
+  border-bottom: 1px dashed #999;
+  padding: 6px 0;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+}
+.receipt-row span {
+  color: #555;
+}
+.receipt-sep {
+  border-top: 1px dashed #999;
+  margin: 8px 0;
+}
+.receipt-footer {
+  text-align: center;
+  margin-top: 12px;
+  font-style: italic;
+}
+
+/* Impression : n'affiche que le contenu du reçu, rien d'autre de la page
+   (sidebar, topbar, boutons du modal...). Fonctionne avec toute imprimante
+   installée comme imprimante système (USB, réseau, Bluetooth appairée). */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receiptContent,
+  #receiptContent * {
+    visibility: visible;
+  }
+  #receiptContent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
