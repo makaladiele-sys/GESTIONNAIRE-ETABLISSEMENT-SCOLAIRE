@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Gestion Scolaire Suite — ERP/SIS scolaire multi-établissements">
-<title>Gestion Scolaire Suite</title>
+<meta name="description" content="Chift Digital Academy — ERP/SIS scolaire multi-établissements">
+<title>Chift Digital Academy</title>
+<link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -16,8 +17,8 @@
 <!-- ================================================================ AUTH GATE -->
 <div id="authGate">
   <div id="authCard">
-    <div class="brand-mark">GS</div>
-    <h1 id="authTitle">Gestion Scolaire Suite</h1>
+    <img src="assets/logo.png" alt="Chift Digital Academy" class="brand-mark">
+    <h1 id="authTitle">Chift Digital Academy</h1>
     <p class="sub" id="authSubtitle">Connexion sécurisée à votre établissement</p>
 
     <div id="authLoginFields">
@@ -38,6 +39,7 @@
       <input id="authSignupPhone" type="tel" placeholder="+221 77 000 00 00">
       <label for="authSignupPassword">Mot de passe</label>
       <input id="authSignupPassword" type="password" autocomplete="new-password" placeholder="8 caractères minimum">
+      <div class="notice">🎁 15 jours d'essai gratuit dès l'activation de votre compte par la plateforme.</div>
       <button id="authSignupBtn" class="auth-btn" type="button">Créer mon établissement</button>
       <div id="authSignupSuccess" style="display:none;margin-top:14px;padding:11px 13px;border-radius:9px;background:var(--success-soft);color:var(--success);font-size:13.5px"></div>
     </div>
@@ -61,8 +63,8 @@
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark">GS</div>
-      <div><h1>GESTION SCOLAIRE SUITE</h1><small>ERP • SIS • FINANCE • SAAS</small></div>
+      <img src="assets/logo.png" alt="Chift Digital Academy" class="brand-mark">
+      <div><h1>CHIFT DIGITAL ACADEMY</h1><small>ERP • SIS • FINANCE • SAAS</small></div>
     </div>
     <div class="tenant-card" id="tenantCard"><b>Établissement</b><small>Chargement…</small></div>
 
@@ -475,8 +477,8 @@
         <div class="stats" id="superAdminStats"></div>
         <div class="card">
           <div class="table-wrap">
-            <table class="table"><thead><tr><th>Établissement</th><th>Email admin</th><th>Téléphone</th><th>Créé le</th><th>Statut</th><th>Action</th></tr></thead>
-            <tbody id="superAdminBody"><tr><td colspan="6" class="empty">Chargement…</td></tr></tbody></table>
+            <table class="table"><thead><tr><th>Établissement</th><th>Email admin</th><th>Téléphone</th><th>Créé le</th><th>Statut</th><th>Essai</th><th>Action</th></tr></thead>
+            <tbody id="superAdminBody"><tr><td colspan="7" class="empty">Chargement…</td></tr></tbody></table>
           </div>
         </div>
       </div>
