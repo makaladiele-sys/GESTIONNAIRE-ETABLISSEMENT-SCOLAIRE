@@ -341,4 +341,123 @@ async function updateSchoolStatus(schoolId, newStatus) {
 
     const { data, error } = await sb
       .from("schools")
-   
+      .update(patch)
+      .eq("id", schoolId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur UPDATE :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    console.log("[SuperAdmin] Établissement modifié :", data);
+
+    toast(
+      newStatus === STATUS.ACTIVE
+        ? `✅ Établissement activé — essai de ${TRIAL_DAYS} jours démarré.`
+        : "⛔ Établissement suspendu."
+    );
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception UPDATE :", err);
+
+    toast(
+      "Erreur : " +
+        (err?.message || "Impossible de modifier l'établissement.")
+    );
+  }
+}
+
+// --------------------------------------------------------------------------
+// Passer un établissement en accès illimité (retire la date d'expiration)
+// --------------------------------------------------------------------------
+
+async function makeUnlimited(schoolId) {
+  if (!schoolId) {
+    toast("Établissement invalide.");
+    return;
+  }
+
+  const confirmation = window.confirm(
+    "Retirer la limite d'essai et passer cet établissement en accès illimité ?"
+  );
+
+  if (!confirmation) return;
+
+  try {
+    const sb = getSupabase();
+
+    if (!sb) {
+      toast("Client Supabase indisponible.");
+      return;
+    }
+
+    const { error } = await sb
+      .from("schools")
+      .update({ trial_ends_at: null })
+      .eq("id", schoolId);
+
+    if (error) {
+      console.error("[SuperAdmin] Erreur UPDATE (illimité) :", error);
+      toast("Erreur : " + error.message);
+      return;
+    }
+
+    toast("🔓 Établissement passé en accès illimité.");
+
+    await refresh();
+
+  } catch (err) {
+    console.error("[SuperAdmin] Exception UPDATE (illimité) :", err);
+    toast("Erreur : " + (err?.message || "Impossible de modifier l'établissement."));
+  }
+}
+
+// --------------------------------------------------------------------------
+// Montage
+// --------------------------------------------------------------------------
+
+// Empêche mount() d'attacher deux fois les mêmes écouteurs si la vue Super
+// Admin est montée plusieurs fois.
+let _mounted = false;
+
+export function mount() {
+  if (_mounted) return;
+  _mounted = true;
+
+  const body = el("superAdminBody");
+
+  body?.addEventListener("click", async (event) => {
+    const deleteButton = event.target.closest("[data-delete-school]");
+
+    if (deleteButton) {
+      const schoolId = deleteButton.dataset.deleteSchool;
+      const schoolName = deleteButton.dataset.name;
+
+      await deleteSchool(schoolId, schoolName);
+      return;
+    }
+
+    const unlimitedButton = event.target.closest("[data-unlimited]");
+
+    if (unlimitedButton) {
+      await makeUnlimited(unlimitedButton.dataset.id);
+      return;
+    }
+
+    const button = event.target.closest("[data-status]");
+
+    if (!button) return;
+
+    const schoolId = button.dataset.id;
+    const newStatus = button.dataset.status;
+
+    await updateSchoolStatus(schoolId, newStatus);
+  });
+
+  el("refreshSuperAdmin")?.addEventListener("click", refresh);
+}
