@@ -145,30 +145,58 @@ function buildReceiptHtml(p) {
   const dateStr = p.payment_date
     ? new Date(p.payment_date).toLocaleDateString("fr-FR")
     : new Date().toLocaleDateString("fr-FR");
+  const timeStr = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  const contactLines = [state.school?.phone, state.school?.email].filter(Boolean).join(" · ");
+
+  const row = (label, value, big = false) => `
+    <div class="receipt-row${big ? " receipt-row-big" : ""}">
+      <span class="receipt-label">${escapeHtml(label)}</span>
+      <span class="receipt-fill"></span>
+      <span class="receipt-value">${value}</span>
+    </div>
+  `;
 
   return `
     <div class="receipt">
       <div class="receipt-head">
+        <div class="receipt-icon">🧾</div>
         <b class="receipt-school">${escapeHtml(state.school?.name || "Établissement")}</b>
-        ${state.school?.phone ? `<div>${escapeHtml(state.school.phone)}</div>` : ""}
-        ${state.school?.email ? `<div>${escapeHtml(state.school.email)}</div>` : ""}
-        ${state.school?.address ? `<div>${escapeHtml(state.school.address)}</div>` : ""}
+        ${contactLines ? `<div class="receipt-contact">${escapeHtml(contactLines)}</div>` : ""}
+        ${state.school?.address ? `<div class="receipt-contact">${escapeHtml(state.school.address)}</div>` : ""}
       </div>
-      <div class="receipt-title">REÇU DE PAIEMENT</div>
-      <div class="receipt-row"><span>Référence</span><b>${escapeHtml(reference)}</b></div>
-      <div class="receipt-row"><span>Date</span><b>${escapeHtml(dateStr)}</b></div>
+
+      <div class="receipt-title">Reçu de paiement</div>
+
+      <div class="receipt-meta">
+        <span>N° ${escapeHtml(reference)}</span>
+        <span>${escapeHtml(dateStr)} · ${escapeHtml(timeStr)}</span>
+      </div>
+
       <div class="receipt-sep"></div>
-      <div class="receipt-row"><span>Élève</span><b>${escapeHtml(p.student_name || "—")}</b></div>
-      <div class="receipt-row"><span>Classe</span><b>${escapeHtml(s?.class_name || "—")}</b></div>
-      <div class="receipt-row"><span>Parent / Tuteur</span><b>${escapeHtml(s?.parent_name || "—")}</b></div>
+
+      ${row("Élève", escapeHtml(p.student_name || "—"))}
+      ${row("Classe", escapeHtml(s?.class_name || "—"))}
+      ${row("Parent / Tuteur", escapeHtml(s?.parent_name || "—"))}
+
       <div class="receipt-sep"></div>
-      <div class="receipt-row"><span>Motif</span><b>${escapeHtml(p.reason || "—")}</b></div>
-      <div class="receipt-row"><span>Montant dû</span><b>${fmtMoney(p.amount_due, currency)}</b></div>
-      <div class="receipt-row"><span>Montant payé</span><b>${fmtMoney(p.amount_paid, currency)}</b></div>
-      <div class="receipt-row"><span>Reste</span><b>${fmtMoney(Math.max(0, rest), currency)}</b></div>
-      <div class="receipt-row"><span>Moyen</span><b>${escapeHtml(p.method || "—")}</b></div>
+
+      ${row("Motif", escapeHtml(p.reason || "—"))}
+      ${row("Montant dû", fmtMoney(p.amount_due, currency))}
+      ${row("Reste", fmtMoney(Math.max(0, rest), currency))}
+      ${row("Moyen", escapeHtml(p.method || "—"))}
+
+      <div class="receipt-sep receipt-sep-bold"></div>
+
+      ${row("MONTANT PAYÉ", `<b>${fmtMoney(p.amount_paid, currency)}</b>`, true)}
+
       <div class="receipt-sep"></div>
-      <div class="receipt-footer">Merci de votre confiance.</div>
+
+      <div class="receipt-footer">
+        <div>Merci de votre confiance</div>
+        <div class="receipt-barcode">‖▌│▌‖│▌▌│‖▌│▌‖▌│‖▌</div>
+        <div class="receipt-ref-small">${escapeHtml(reference)}</div>
+      </div>
     </div>
   `;
 }
