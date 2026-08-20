@@ -3,7 +3,7 @@
 // ==========================================================================
 import { isConfigured } from "./supabaseClient.js";
 import { initAuth, setAuthCallbacks, logout } from "./auth.js";
-import { state, isPlatformAdmin } from "./state.js";
+import { state, isPlatformAdmin, checkTrialStatus } from "./state.js";
 import { showPage, setNavigateHandler, toggleSidebar, closeSidebar, toast } from "./ui.js";
 
 import * as dashboard from "./modules/dashboard.js";
@@ -119,14 +119,49 @@ function bindChrome() {
   setNavigateHandler(refreshPage);
 }
 
+// --------------------------------------------------------------------------
+// Contrôle périodique de la période d'essai : coupe une session déjà
+// ouverte dès que l'essai expire, sans attendre une reconnexion.
+// --------------------------------------------------------------------------
+
+const TRIAL_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let _trialIntervalId = null;
+
+function startTrialWatch() {
+  stopTrialWatch();
+  if (isPlatformAdmin()) return; // le SuperAdmin n'est pas concerné
+
+  _trialIntervalId = setInterval(async () => {
+    const result = await checkTrialStatus();
+    if (!result.ok) {
+      stopTrialWatch();
+      toast(
+        result.reason === "trial_expired"
+          ? "⛔ Votre période d'essai de 15 jours est terminée."
+          : "⛔ Votre établissement a été suspendu."
+      );
+      await logout();
+    }
+  }, TRIAL_CHECK_INTERVAL_MS);
+}
+
+function stopTrialWatch() {
+  if (_trialIntervalId) {
+    clearInterval(_trialIntervalId);
+    _trialIntervalId = null;
+  }
+}
+
 async function onAuthenticated() {
   applyRoleUI();
   mountAllModules();
   const startPage = isPlatformAdmin() ? "superadmin" : "dashboard";
   showPage(startPage);
+  startTrialWatch();
 }
 
 function onSignedOut() {
+  stopTrialWatch();
   // le gate se réaffiche automatiquement (voir auth.js)
 }
 
