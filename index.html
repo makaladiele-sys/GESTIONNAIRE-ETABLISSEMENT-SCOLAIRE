@@ -608,6 +608,15 @@
   </div><button class="btn btn-primary" style="margin-top:16px">Valider et générer le reçu</button></form>
 </div></div>
 
+<div class="modal" id="receiptModal"><div class="modal-box">
+  <div class="modal-head no-print"><h3>Reçu de paiement</h3><button class="close" data-close-modal>×</button></div>
+  <div id="receiptContent"></div>
+  <div class="no-print" style="display:flex;gap:8px;margin-top:16px">
+    <button class="btn btn-primary" id="printReceiptBtn">🖨 Imprimer</button>
+    <button class="btn btn-light" data-close-modal>Fermer</button>
+  </div>
+</div></div>
+
 <div class="modal" id="cashModal"><div class="modal-box">
   <div class="modal-head"><h3>Opération de caisse</h3><button class="close" data-close-modal>×</button></div>
   <form id="cashForm"><div class="form-grid">
