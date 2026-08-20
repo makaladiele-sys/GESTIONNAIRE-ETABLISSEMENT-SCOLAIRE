@@ -6,6 +6,13 @@
 // Les paiements sont rattachés à l'ID réel de l'élève (student_id), pas à
 // son nom en texte libre — deux élèves peuvent porter le même nom, ce qui
 // mélangeait leurs paiements avant (voir sql/10_payments_student_link.sql).
+//
+// Le reçu (🧾) ouvre un modal imprimable via window.print() — compatible
+// avec toute imprimante installée comme imprimante système (USB, réseau,
+// et Bluetooth déjà appairée en tant qu'imprimante). Pour les petites
+// imprimantes thermiques Bluetooth qui ne s'installent pas comme
+// imprimante système (type ATPOS), l'appli Android RawBT capte
+// l'impression du site et la reformate pour l'imprimante thermique.
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
@@ -126,11 +133,63 @@ function fillForm(p) {
   updateAmountHint();
 }
 
+// --------------------------------------------------------------------------
+// Reçu imprimable
+// --------------------------------------------------------------------------
+
+function buildReceiptHtml(p) {
+  const currency = state.school?.currency || "FCFA";
+  const s = p.student_id ? studentById(p.student_id) : null;
+  const rest = Number(p.amount_due) - Number(p.amount_paid);
+  const reference = (p.id || "").slice(0, 8).toUpperCase();
+  const dateStr = p.payment_date
+    ? new Date(p.payment_date).toLocaleDateString("fr-FR")
+    : new Date().toLocaleDateString("fr-FR");
+
+  return `
+    <div class="receipt">
+      <div class="receipt-head">
+        <b class="receipt-school">${escapeHtml(state.school?.name || "Établissement")}</b>
+        ${state.school?.phone ? `<div>${escapeHtml(state.school.phone)}</div>` : ""}
+        ${state.school?.email ? `<div>${escapeHtml(state.school.email)}</div>` : ""}
+        ${state.school?.address ? `<div>${escapeHtml(state.school.address)}</div>` : ""}
+      </div>
+      <div class="receipt-title">REÇU DE PAIEMENT</div>
+      <div class="receipt-row"><span>Référence</span><b>${escapeHtml(reference)}</b></div>
+      <div class="receipt-row"><span>Date</span><b>${escapeHtml(dateStr)}</b></div>
+      <div class="receipt-sep"></div>
+      <div class="receipt-row"><span>Élève</span><b>${escapeHtml(p.student_name || "—")}</b></div>
+      <div class="receipt-row"><span>Classe</span><b>${escapeHtml(s?.class_name || "—")}</b></div>
+      <div class="receipt-row"><span>Parent / Tuteur</span><b>${escapeHtml(s?.parent_name || "—")}</b></div>
+      <div class="receipt-sep"></div>
+      <div class="receipt-row"><span>Motif</span><b>${escapeHtml(p.reason || "—")}</b></div>
+      <div class="receipt-row"><span>Montant dû</span><b>${fmtMoney(p.amount_due, currency)}</b></div>
+      <div class="receipt-row"><span>Montant payé</span><b>${fmtMoney(p.amount_paid, currency)}</b></div>
+      <div class="receipt-row"><span>Reste</span><b>${fmtMoney(Math.max(0, rest), currency)}</b></div>
+      <div class="receipt-row"><span>Moyen</span><b>${escapeHtml(p.method || "—")}</b></div>
+      <div class="receipt-sep"></div>
+      <div class="receipt-footer">Merci de votre confiance.</div>
+    </div>
+  `;
+}
+
+function openReceipt(paymentId) {
+  const p = (state.cache.payments || []).find((x) => x.id === paymentId);
+  if (!p) return;
+  const box = el("receiptContent");
+  if (box) box.innerHTML = buildReceiptHtml(p);
+  openModal("receiptModal");
+}
+
 export function mount() {
   el("openAddPayment")?.addEventListener("click", () => {
     resetForm();
     openModal("paymentModal");
     updateAmountHint();
+  });
+
+  el("printReceiptBtn")?.addEventListener("click", () => {
+    window.print();
   });
 
   el("fPayStudent")?.addEventListener("change", () => {
@@ -145,11 +204,7 @@ export function mount() {
     const delId = e.target.closest("[data-del]")?.dataset.del;
 
     if (receiptId) {
-      const p = (state.cache.payments || []).find((x) => x.id === receiptId);
-      if (!p) return;
-      alert(
-        `REÇU DE PAIEMENT\n\nÉtablissement : ${state.school?.name || ""}\nÉlève : ${p.student_name}\nMotif : ${p.reason}\nMontant : ${fmtMoney(p.amount_paid, state.school?.currency)}\nDate : ${p.payment_date}\nRéférence : ${p.id.slice(0, 8).toUpperCase()}`
-      );
+      openReceipt(receiptId);
     }
 
     if (editId) {
@@ -202,17 +257,21 @@ export function mount() {
       method: el("fPayMethod").value,
       status: amountPaid >= amountDue ? "Payé" : "Partiel",
     };
+    const isNewPayment = !editingId;
     try {
+      let saved;
       if (editingId) {
-        await updateRow("payments", editingId, payload);
+        saved = await updateRow("payments", editingId, payload);
         toast("Paiement mis à jour");
       } else {
-        await insertRow("payments", { ...payload, payment_date: new Date().toISOString().slice(0, 10) });
+        saved = await insertRow("payments", { ...payload, payment_date: new Date().toISOString().slice(0, 10) });
         toast("Paiement enregistré — reçu disponible");
       }
       closeModal("paymentModal");
       resetForm();
       await refresh();
+      // Ouvre directement le reçu imprimable après un nouvel encaissement.
+      if (isNewPayment && saved?.id) openReceipt(saved.id);
     } catch (err) {
       toast("Erreur : " + err.message);
     }
