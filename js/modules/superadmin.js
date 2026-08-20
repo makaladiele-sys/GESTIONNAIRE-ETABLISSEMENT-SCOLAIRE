@@ -6,8 +6,9 @@
 // Fonctionnalités :
 // - Affichage de tous les établissements
 // - Compteurs : total / attente / actifs / suspendus
-// - Activation d'un établissement
+// - Activation d'un établissement (démarre un essai de 15 jours)
 // - Suspension d'un établissement
+// - Passage en accès illimité (compte payant / grandfathered)
 // - Suppression d'un établissement
 // - Actualisation après chaque action
 // - Gestion détaillée des erreurs Supabase
@@ -28,6 +29,8 @@ const STATUS = {
   SUSPENDED: "suspended",
 };
 
+const TRIAL_DAYS = 15;
+
 // --------------------------------------------------------------------------
 // Rafraîchir les établissements
 // --------------------------------------------------------------------------
@@ -45,6 +48,24 @@ export async function refresh() {
   return _refreshPromise;
 }
 
+function trialBadge(school) {
+  if (school.status !== STATUS.ACTIVE) return `<span class="badge">—</span>`;
+
+  if (!school.trial_ends_at) {
+    return `<span class="badge green">Illimité</span>`;
+  }
+
+  const msLeft = new Date(school.trial_ends_at).getTime() - Date.now();
+
+  if (msLeft <= 0) {
+    return `<span class="badge red">Expiré</span>`;
+  }
+
+  const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+  const cls = daysLeft <= 3 ? "orange" : "green";
+  return `<span class="badge ${cls}">${daysLeft} j restants</span>`;
+}
+
 async function _refreshInner() {
   const body = el("superAdminBody");
   const stats = el("superAdminStats");
@@ -56,7 +77,7 @@ async function _refreshInner() {
 
   body.innerHTML = `
     <tr>
-      <td colspan="6" class="empty">
+      <td colspan="7" class="empty">
         Chargement des établissements…
       </td>
     </tr>
@@ -87,7 +108,7 @@ async function _refreshInner() {
 
       body.innerHTML = `
         <tr>
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             <b>Erreur de chargement</b><br>
             ${escapeHtml(error.message)}
           </td>
@@ -96,37 +117,10 @@ async function _refreshInner() {
 
       if (stats) {
         stats.innerHTML = `
-          <div class="stat">
-            <div>
-              <div class="label">Établissements</div>
-              <div class="value">—</div>
-            </div>
-            <div class="stat-icon">🏫</div>
-          </div>
-
-          <div class="stat">
-            <div>
-              <div class="label">En attente</div>
-              <div class="value">—</div>
-            </div>
-            <div class="stat-icon">⏳</div>
-          </div>
-
-          <div class="stat">
-            <div>
-              <div class="label">Actifs</div>
-              <div class="value">—</div>
-            </div>
-            <div class="stat-icon">✅</div>
-          </div>
-
-          <div class="stat">
-            <div>
-              <div class="label">Suspendus</div>
-              <div class="value">—</div>
-            </div>
-            <div class="stat-icon">⛔</div>
-          </div>
+          <div class="stat"><div><div class="label">Établissements</div><div class="value">—</div></div><div class="stat-icon">🏫</div></div>
+          <div class="stat"><div><div class="label">En attente</div><div class="value">—</div></div><div class="stat-icon">⏳</div></div>
+          <div class="stat"><div><div class="label">Actifs</div><div class="value">—</div></div><div class="stat-icon">✅</div></div>
+          <div class="stat"><div><div class="label">Suspendus</div><div class="value">—</div></div><div class="stat-icon">⛔</div></div>
         `;
       }
 
@@ -147,37 +141,10 @@ async function _refreshInner() {
 
     if (stats) {
       stats.innerHTML = `
-        <div class="stat">
-          <div>
-            <div class="label">Établissements</div>
-            <div class="value">${rows.length}</div>
-          </div>
-          <div class="stat-icon">🏫</div>
-        </div>
-
-        <div class="stat">
-          <div>
-            <div class="label">En attente</div>
-            <div class="value">${pending}</div>
-          </div>
-          <div class="stat-icon">⏳</div>
-        </div>
-
-        <div class="stat">
-          <div>
-            <div class="label">Actifs</div>
-            <div class="value">${active}</div>
-          </div>
-          <div class="stat-icon">✅</div>
-        </div>
-
-        <div class="stat">
-          <div>
-            <div class="label">Suspendus</div>
-            <div class="value">${suspended}</div>
-          </div>
-          <div class="stat-icon">⛔</div>
-        </div>
+        <div class="stat"><div><div class="label">Établissements</div><div class="value">${rows.length}</div></div><div class="stat-icon">🏫</div></div>
+        <div class="stat"><div><div class="label">En attente</div><div class="value">${pending}</div></div><div class="stat-icon">⏳</div></div>
+        <div class="stat"><div><div class="label">Actifs</div><div class="value">${active}</div></div><div class="stat-icon">✅</div></div>
+        <div class="stat"><div><div class="label">Suspendus</div><div class="value">${suspended}</div></div><div class="stat-icon">⛔</div></div>
       `;
     }
 
@@ -188,7 +155,7 @@ async function _refreshInner() {
     if (!rows.length) {
       body.innerHTML = `
         <tr>
-          <td colspan="6" class="empty">
+          <td colspan="7" class="empty">
             Aucun établissement inscrit pour le moment.
           </td>
         </tr>
@@ -221,22 +188,21 @@ async function _refreshInner() {
 
         if (school.status === STATUS.ACTIVE) {
           action = `
-            <button
-              class="btn btn-light btn-sm"
-              data-status="suspended"
-              data-id="${escapeHtml(school.id)}"
-            >
+            <button class="btn btn-light btn-sm" data-status="suspended" data-id="${escapeHtml(school.id)}">
               ⛔ Suspendre
             </button>
           `;
+          if (school.trial_ends_at) {
+            action += `
+              <button class="btn btn-light btn-sm" data-unlimited="true" data-id="${escapeHtml(school.id)}" style="margin-left:6px">
+                🔓 Illimité
+              </button>
+            `;
+          }
         } else {
           action = `
-            <button
-              class="btn btn-primary btn-sm"
-              data-status="active"
-              data-id="${escapeHtml(school.id)}"
-            >
-              ✅ Activer
+            <button class="btn btn-primary btn-sm" data-status="active" data-id="${escapeHtml(school.id)}">
+              ✅ Activer (${TRIAL_DAYS}j d'essai)
             </button>
           `;
         }
@@ -259,6 +225,7 @@ async function _refreshInner() {
             <td>${escapeHtml(school.phone || "—")}</td>
             <td>${created}</td>
             <td>${statusBadge}</td>
+            <td>${trialBadge(school)}</td>
             <td>${action}</td>
           </tr>
         `;
@@ -270,7 +237,7 @@ async function _refreshInner() {
 
     body.innerHTML = `
       <tr>
-        <td colspan="6" class="empty">
+        <td colspan="7" class="empty">
           <b>Erreur inattendue</b><br>
           ${escapeHtml(err?.message || "Impossible de charger les établissements.")}
         </td>
@@ -346,11 +313,12 @@ async function updateSchoolStatus(schoolId, newStatus) {
     return;
   }
 
-  const actionLabel = newStatus === STATUS.ACTIVE ? "activer" : "suspendre";
+  const actionLabel =
+    newStatus === STATUS.ACTIVE
+      ? `activer cet établissement et démarrer un essai de ${TRIAL_DAYS} jours`
+      : "suspendre cet établissement";
 
-  const confirmation = window.confirm(
-    `Voulez-vous vraiment ${actionLabel} cet établissement ?`
-  );
+  const confirmation = window.confirm(`Voulez-vous vraiment ${actionLabel} ?`);
 
   if (!confirmation) return;
 
@@ -362,75 +330,15 @@ async function updateSchoolStatus(schoolId, newStatus) {
       return;
     }
 
-    console.log("[SuperAdmin] Modification statut :", { schoolId, newStatus });
+    const patch = { status: newStatus };
+
+    if (newStatus === STATUS.ACTIVE) {
+      const trialEnd = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+      patch.trial_ends_at = trialEnd.toISOString();
+    }
+
+    console.log("[SuperAdmin] Modification statut :", { schoolId, patch });
 
     const { data, error } = await sb
       .from("schools")
-      .update({ status: newStatus })
-      .eq("id", schoolId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("[SuperAdmin] Erreur UPDATE :", error);
-      toast("Erreur : " + error.message);
-      return;
-    }
-
-    console.log("[SuperAdmin] Établissement modifié :", data);
-
-    toast(
-      newStatus === STATUS.ACTIVE
-        ? "✅ Établissement activé."
-        : "⛔ Établissement suspendu."
-    );
-
-    await refresh();
-
-  } catch (err) {
-    console.error("[SuperAdmin] Exception UPDATE :", err);
-
-    toast(
-      "Erreur : " +
-        (err?.message || "Impossible de modifier l'établissement.")
-    );
-  }
-}
-
-// --------------------------------------------------------------------------
-// Montage
-// --------------------------------------------------------------------------
-
-// Empêche mount() d'attacher deux fois les mêmes écouteurs si la vue Super
-// Admin est montée plusieurs fois.
-let _mounted = false;
-
-export function mount() {
-  if (_mounted) return;
-  _mounted = true;
-
-  const body = el("superAdminBody");
-
-  body?.addEventListener("click", async (event) => {
-    const deleteButton = event.target.closest("[data-delete-school]");
-
-    if (deleteButton) {
-      const schoolId = deleteButton.dataset.deleteSchool;
-      const schoolName = deleteButton.dataset.name;
-
-      await deleteSchool(schoolId, schoolName);
-      return;
-    }
-
-    const button = event.target.closest("[data-status]");
-
-    if (!button) return;
-
-    const schoolId = button.dataset.id;
-    const newStatus = button.dataset.status;
-
-    await updateSchoolStatus(schoolId, newStatus);
-  });
-
-  el("refreshSuperAdmin")?.addEventListener("click", refresh);
-}
+   
