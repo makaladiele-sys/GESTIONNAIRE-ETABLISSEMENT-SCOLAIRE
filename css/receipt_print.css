@@ -1,51 +1,119 @@
 /* ==========================================================================
-   Reçu de paiement imprimable
+   Reçu de paiement imprimable — format ticket de caisse
    ========================================================================== */
 
 .receipt {
   font-family: "Courier New", monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #12172b;
-  max-width: 340px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #1a1a1a;
+  max-width: 300px;
   margin: 0 auto;
-  padding: 8px 4px;
+  padding: 18px 14px;
+  background: #fff;
+  border: 1px solid #e2e4ec;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
+
 .receipt-head {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+.receipt-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
 }
 .receipt-school {
   font-size: 15px;
   display: block;
-  margin-bottom: 2px;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+  text-transform: uppercase;
 }
+.receipt-contact {
+  font-size: 11px;
+  color: #666;
+  word-break: break-word;
+}
+
 .receipt-title {
   text-align: center;
   font-weight: 700;
-  letter-spacing: 1px;
-  margin: 10px 0;
-  border-top: 1px dashed #999;
-  border-bottom: 1px dashed #999;
-  padding: 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 11.5px;
+  margin: 10px 0 6px;
 }
-.receipt-row {
+
+.receipt-meta {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 0;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
 }
-.receipt-row span {
-  color: #555;
-}
+
 .receipt-sep {
-  border-top: 1px dashed #999;
+  border-top: 1px dashed #b7bbc9;
   margin: 8px 0;
 }
+.receipt-sep-bold {
+  border-top: 1px solid #1a1a1a;
+}
+
+.receipt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 0;
+}
+.receipt-label {
+  color: #555;
+  white-space: nowrap;
+}
+.receipt-value {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.receipt-fill {
+  flex: 1;
+  border-bottom: 1px dotted #ccc;
+  margin: 0 4px;
+  transform: translateY(-3px);
+}
+
+.receipt-row-big {
+  margin-top: 4px;
+}
+.receipt-row-big .receipt-label {
+  font-weight: 700;
+  font-size: 13px;
+}
+.receipt-row-big .receipt-value {
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .receipt-footer {
   text-align: center;
   margin-top: 12px;
+}
+.receipt-footer > div:first-child {
   font-style: italic;
+  margin-bottom: 8px;
+}
+.receipt-barcode {
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: #1a1a1a;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.receipt-ref-small {
+  font-size: 10px;
+  color: #888;
+  letter-spacing: 1px;
 }
 
 /* Impression : n'affiche que le contenu du reçu, rien d'autre de la page
@@ -64,6 +132,11 @@
     top: 0;
     left: 0;
     width: 100%;
+  }
+  .receipt {
+    box-shadow: none;
+    border: none;
+    max-width: 280px;
   }
   .no-print {
     display: none !important;
