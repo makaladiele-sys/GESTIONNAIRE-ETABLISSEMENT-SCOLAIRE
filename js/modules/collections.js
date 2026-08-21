@@ -6,6 +6,7 @@
 import { listRows, state } from "../state.js";
 import { toast, escapeHtml, fmtMoney } from "../ui.js";
 import { computeCollectionsRows } from "./feeCalc.js";
+import { exportStyledDocx } from "./docxExport.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -134,52 +135,7 @@ async function exportCollectionsToWord() {
     toast("Aucune ligne à exporter avec ces filtres.");
     return;
   }
-
-  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
-  const headers = Object.keys(rows[0]);
-
-  const headerRow = new TableRow({
-    children: headers.map(
-      (h) =>
-        new TableCell({
-          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
-        })
-    ),
-  });
-
-  const dataRows = rows.map(
-    (r) =>
-      new TableRow({
-        children: headers.map(
-          (h) =>
-            new TableCell({
-              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-              children: [new Paragraph(String(r[h] ?? ""))],
-            })
-        ),
-      })
-  );
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({ children: [new TextRun({ text: `Recouvrement — ${state.school?.name || ""}`, bold: true, size: 28 })] }),
-          new Paragraph({ text: "" }),
-          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
-        ],
-      },
-    ],
-  });
-
-  const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "recouvrement.docx";
-  a.click();
-  URL.revokeObjectURL(url);
+  await exportStyledDocx("Recouvrement", rows, "recouvrement.docx");
 }
 
 export function mount() {
