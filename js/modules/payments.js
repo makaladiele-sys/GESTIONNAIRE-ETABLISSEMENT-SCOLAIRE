@@ -247,7 +247,7 @@ async function exportPaymentsToWord() {
     return;
   }
 
-  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
+  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = window.docx;
 
   const headers = Object.keys(rows[0]);
 
