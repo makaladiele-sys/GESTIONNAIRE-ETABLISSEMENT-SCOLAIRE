@@ -7,8 +7,6 @@
 <title>Chift Digital Academy</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
-<link rel="stylesheet" href="css/receipt.css">
-<link rel="stylesheet" href="css/receipt_print.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
@@ -574,7 +572,9 @@
       </select>
     </div>
     <div class="form-group"><label>Note /20 *</label><input id="fGradeNote" type="number" min="0" max="20" step=".01" class="form-control" required></div>
-    <div class="form-group"><label>Coefficient</label><input id="fGradeCoef" type="number" min="0.1" step=".1" value="1" class="form-control"></div>
+    <div class="form-group"><label>Coefficient</label><input id="fGradeCoef" type="number" min="0.1" step=".1" value="1" class="form-control">
+      <span class="hint">Ajustable librement — chaque matière peut avoir un coefficient différent.</span>
+    </div>
     <div class="form-group"><label>Période</label>
       <select id="fGradePeriod" class="form-control"><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
     </div>
