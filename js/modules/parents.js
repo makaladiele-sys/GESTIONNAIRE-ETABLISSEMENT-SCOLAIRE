@@ -136,9 +136,97 @@ function fillForm(p) {
   renderFeeRows();
 }
 
+// --------------------------------------------------------------------------
+// Exports Excel / Word
+// --------------------------------------------------------------------------
+
+function parentExportRows() {
+  const currency = state.school?.currency || "FCFA";
+  return (state.cache.parents || []).map((p) => {
+    const kids = childrenOf(p);
+    const solde = soldeOf(p);
+    return {
+      "Parent / Tuteur": p.name || "",
+      "Téléphone": p.phone || "—",
+      "Email": p.email || "—",
+      "Enfant(s)": kids.length ? kids.map((s) => s.name).join(", ") : "—",
+      "Solde restant": kids.length && solde?.configured ? Math.round(solde.remaining) : "",
+    };
+  });
+}
+
+function exportParentsToExcel() {
+  const rows = parentExportRows();
+  if (!rows.length) {
+    toast("Aucun parent à exporter.");
+    return;
+  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Parents");
+  XLSX.writeFile(wb, "parents.xlsx");
+}
+
+async function exportParentsToWord() {
+  const rows = parentExportRows();
+  if (!rows.length) {
+    toast("Aucun parent à exporter.");
+    return;
+  }
+
+  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
+  const headers = Object.keys(rows[0]);
+
+  const headerRow = new TableRow({
+    children: headers.map(
+      (h) =>
+        new TableCell({
+          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
+        })
+    ),
+  });
+
+  const dataRows = rows.map(
+    (r) =>
+      new TableRow({
+        children: headers.map(
+          (h) =>
+            new TableCell({
+              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+              children: [new Paragraph(String(r[h] ?? ""))],
+            })
+        ),
+      })
+  );
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ children: [new TextRun({ text: `Parents / Tuteurs — ${state.school?.name || ""}`, bold: true, size: 28 })] }),
+          new Paragraph({ text: "" }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "parents.docx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function mount() {
   el("parentSearch")?.addEventListener("input", renderTable);
   el("fParentChildren")?.addEventListener("change", renderFeeRows);
+
+  el("exportParentsExcel")?.addEventListener("click", exportParentsToExcel);
+  el("exportParentsWord")?.addEventListener("click", exportParentsToWord);
 
   el("openAddParent")?.addEventListener("click", () => {
     resetForm();
