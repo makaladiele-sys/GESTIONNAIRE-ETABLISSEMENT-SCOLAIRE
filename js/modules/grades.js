@@ -4,6 +4,11 @@
 // Une fois une classe+matière+période "envoyée au directeur", elle est
 // verrouillée pour l'enseignant ; seul un compte "admin" peut la modifier
 // ou la réouvrir.
+//
+// Coefficient des devoirs/composition : DEFAULT_COEF n'est qu'une suggestion
+// de départ selon le type d'évaluation. Les coefficients réels varient
+// selon la matière (surtout au primaire), donc dès que l'enseignant modifie
+// le champ à la main, on ne l'écrase plus jamais automatiquement.
 // ==========================================================================
 import { listRows, insertRow, deleteRow, state, isPlatformAdmin } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
@@ -11,6 +16,11 @@ import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
 const el = (id) => document.getElementById(id);
 const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
 const DEFAULT_COEF = { "Devoir 1": 1, "Devoir 2": 1, "Devoir 3": 1, Composition: 2 };
+
+// Suivi : l'enseignant a-t-il modifié le coefficient lui-même dans cette
+// ouverture du formulaire ? Si oui, on ne le remplace plus par la
+// suggestion par défaut quand il change le type de devoir.
+let coefTouchedByUser = false;
 
 function isAdmin() {
   return state.profile?.role === "admin";
@@ -183,6 +193,7 @@ export function mount() {
     }
     el("fGradeClass").innerHTML = classNames.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
     el("gradeForm")?.reset();
+    coefTouchedByUser = false;
     refreshSubjectOptions();
     openModal("gradeModal");
   });
@@ -193,7 +204,15 @@ export function mount() {
     updateLockNotice();
   });
   el("fGradePeriod")?.addEventListener("change", updateLockNotice);
+
+  // Le coefficient reste entièrement modifiable : dès que l'enseignant y
+  // touche, on ne propose plus jamais une valeur par défaut à sa place.
+  el("fGradeCoef")?.addEventListener("input", () => {
+    coefTouchedByUser = true;
+  });
+
   el("fGradeType")?.addEventListener("change", () => {
+    if (coefTouchedByUser) return; // l'enseignant a déjà choisi son coefficient — on n'y touche plus
     const t = el("fGradeType").value;
     if (DEFAULT_COEF[t] !== undefined) el("fGradeCoef").value = DEFAULT_COEF[t];
   });
@@ -261,6 +280,7 @@ export function mount() {
       toast("Note enregistrée");
       closeModal("gradeModal");
       el("gradeForm").reset();
+      coefTouchedByUser = false;
       await refresh();
     } catch (err) {
       toast(friendlyLockError(err));
