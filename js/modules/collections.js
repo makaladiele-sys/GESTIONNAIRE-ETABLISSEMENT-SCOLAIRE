@@ -4,10 +4,15 @@
 // mêmes chiffres apparaissent dans Facturation & Paiements.
 // ==========================================================================
 import { listRows, state } from "../state.js";
-import { escapeHtml, fmtMoney } from "../ui.js";
+import { toast, escapeHtml, fmtMoney } from "../ui.js";
 import { computeCollectionsRows } from "./feeCalc.js";
 
 const el = (id) => document.getElementById(id);
+
+// Dernière liste filtrée affichée à l'écran — réutilisée telle quelle pour
+// les exports, afin que le fichier téléchargé corresponde exactement à ce
+// que l'utilisateur voit (mêmes filtres classe/statut/recherche).
+let lastFilteredRows = [];
 
 export async function refresh() {
   if (!state.cache.students) await listRows("students");
@@ -66,6 +71,7 @@ export function render() {
   });
 
   filtered.sort((a, b) => b.remaining - a.remaining);
+  lastFilteredRows = filtered;
 
   el("collectionsBody").innerHTML =
     filtered
@@ -88,9 +94,98 @@ export function render() {
       .join("") || `<tr><td colspan="10" class="empty">Aucun élève ne correspond à ce filtre.</td></tr>`;
 }
 
+// --------------------------------------------------------------------------
+// Exports Excel / Word
+// --------------------------------------------------------------------------
+
+function collectionsExportRows() {
+  return lastFilteredRows.map((r) => {
+    const s = r.student;
+    return {
+      "Élève": s.name || "",
+      "Classe": s.class_name || "—",
+      "Parent": s.parent_name || "—",
+      "Téléphone": s.phone || "—",
+      "Mois écoulés": r.months,
+      "Attendu": Math.round(r.expected),
+      "Payé": Math.round(r.paid),
+      "Reste (retard)": Math.round(Math.max(0, r.remaining)),
+      "Dernier mode": r.lastMethod || "—",
+      "Statut": r.remaining > 0 ? "En retard" : "À jour",
+    };
+  });
+}
+
+function exportCollectionsToExcel() {
+  const rows = collectionsExportRows();
+  if (!rows.length) {
+    toast("Aucune ligne à exporter avec ces filtres.");
+    return;
+  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Recouvrement");
+  XLSX.writeFile(wb, "recouvrement.xlsx");
+}
+
+async function exportCollectionsToWord() {
+  const rows = collectionsExportRows();
+  if (!rows.length) {
+    toast("Aucune ligne à exporter avec ces filtres.");
+    return;
+  }
+
+  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
+  const headers = Object.keys(rows[0]);
+
+  const headerRow = new TableRow({
+    children: headers.map(
+      (h) =>
+        new TableCell({
+          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
+        })
+    ),
+  });
+
+  const dataRows = rows.map(
+    (r) =>
+      new TableRow({
+        children: headers.map(
+          (h) =>
+            new TableCell({
+              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+              children: [new Paragraph(String(r[h] ?? ""))],
+            })
+        ),
+      })
+  );
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ children: [new TextRun({ text: `Recouvrement — ${state.school?.name || ""}`, bold: true, size: 28 })] }),
+          new Paragraph({ text: "" }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "recouvrement.docx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function mount() {
   el("colClassFilter")?.addEventListener("change", render);
   el("colStatusFilter")?.addEventListener("change", render);
   el("colSearch")?.addEventListener("input", render);
+  el("exportCollectionsExcel")?.addEventListener("click", exportCollectionsToExcel);
+  el("exportCollectionsWord")?.addEventListener("click", exportCollectionsToWord);
 }
-
