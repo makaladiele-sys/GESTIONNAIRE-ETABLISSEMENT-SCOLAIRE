@@ -11,6 +11,7 @@
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
+import { exportStyledDocx } from "./docxExport.js";
 
 const el = (id) => document.getElementById(id);
 let editingId = null;
@@ -225,52 +226,16 @@ async function exportWord() {
     toast("Aucun élève à exporter.");
     return;
   }
-
-  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
-  const headers = ["Matricule", "Élève", "Classe", "Parent", "Téléphone", "Frais mensuel", "Statut"];
-
-  const headerRow = new TableRow({
-    children: headers.map(
-      (h) =>
-        new TableCell({
-          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
-        })
-    ),
-  });
-
-  const dataRows = students.map(
-    (s) =>
-      new TableRow({
-        children: [s.matricule, s.name, s.class_name, s.parent_name, s.phone, s.monthly_fee || "", s.status].map(
-          (v) =>
-            new TableCell({
-              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
-              children: [new Paragraph(String(v ?? ""))],
-            })
-        ),
-      })
-  );
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({ children: [new TextRun({ text: `Élèves — ${state.school?.name || ""}`, bold: true, size: 28 })] }),
-          new Paragraph({ text: "" }),
-          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
-        ],
-      },
-    ],
-  });
-
-  const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "eleves.docx";
-  a.click();
-  URL.revokeObjectURL(url);
+  const rows = students.map((s) => ({
+    "Matricule": s.matricule || "",
+    "Élève": s.name || "",
+    "Classe": s.class_name || "",
+    "Parent": s.parent_name || "",
+    "Téléphone": s.phone || "",
+    "Frais mensuel": s.monthly_fee || "",
+    "Statut": s.status || "",
+  }));
+  await exportStyledDocx("Élèves", rows, "eleves.docx");
 }
 
 function importExcel(file) {
