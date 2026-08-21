@@ -202,7 +202,8 @@ export function mount() {
     }
   });
 
-  el("exportStudentsBtn")?.addEventListener("click", () => exportExcel());
+  el("exportStudentsExcel")?.addEventListener("click", () => exportExcel());
+  el("exportStudentsWord")?.addEventListener("click", () => exportWord());
   el("importStudentsInput")?.addEventListener("change", (e) => importExcel(e.target.files[0]));
 }
 
@@ -216,6 +217,60 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, ws, "Élèves");
   XLSX.writeFile(wb, "eleves.xlsx");
   toast("Export Excel téléchargé");
+}
+
+async function exportWord() {
+  const students = state.cache.students || [];
+  if (!students.length) {
+    toast("Aucun élève à exporter.");
+    return;
+  }
+
+  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
+  const headers = ["Matricule", "Élève", "Classe", "Parent", "Téléphone", "Frais mensuel", "Statut"];
+
+  const headerRow = new TableRow({
+    children: headers.map(
+      (h) =>
+        new TableCell({
+          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
+        })
+    ),
+  });
+
+  const dataRows = students.map(
+    (s) =>
+      new TableRow({
+        children: [s.matricule, s.name, s.class_name, s.parent_name, s.phone, s.monthly_fee || "", s.status].map(
+          (v) =>
+            new TableCell({
+              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+              children: [new Paragraph(String(v ?? ""))],
+            })
+        ),
+      })
+  );
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ children: [new TextRun({ text: `Élèves — ${state.school?.name || ""}`, bold: true, size: 28 })] }),
+          new Paragraph({ text: "" }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "eleves.docx";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function importExcel(file) {
