@@ -5,6 +5,7 @@ import { isConfigured } from "./supabaseClient.js";
 import { initAuth, setAuthCallbacks, logout } from "./auth.js";
 import { state, isPlatformAdmin, checkTrialStatus } from "./state.js";
 import { showPage, setNavigateHandler, toggleSidebar, closeSidebar, toast } from "./ui.js";
+import { mountBell, refreshBell } from "./modules/notifications.js";
 
 import * as dashboard from "./modules/dashboard.js";
 import * as students from "./modules/students.js";
@@ -117,6 +118,7 @@ function bindChrome() {
   });
 
   setNavigateHandler(refreshPage);
+  mountBell();
 }
 
 // --------------------------------------------------------------------------
@@ -152,16 +154,44 @@ function stopTrialWatch() {
   }
 }
 
+// --------------------------------------------------------------------------
+// Rafraîchissement périodique de la cloche de notifications, pour que le
+// badge se mette à jour même si la personne reste sur la même page.
+// --------------------------------------------------------------------------
+
+const BELL_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+let _bellIntervalId = null;
+
+function startBellWatch() {
+  stopBellWatch();
+  if (isPlatformAdmin()) return;
+  _bellIntervalId = setInterval(() => {
+    // Force un nouveau chargement des messages pour capter les nouveaux envois.
+    state.cache.messages = null;
+    refreshBell();
+  }, BELL_CHECK_INTERVAL_MS);
+}
+
+function stopBellWatch() {
+  if (_bellIntervalId) {
+    clearInterval(_bellIntervalId);
+    _bellIntervalId = null;
+  }
+}
+
 async function onAuthenticated() {
   applyRoleUI();
   mountAllModules();
   const startPage = isPlatformAdmin() ? "superadmin" : "dashboard";
   showPage(startPage);
   startTrialWatch();
+  await refreshBell();
+  startBellWatch();
 }
 
 function onSignedOut() {
   stopTrialWatch();
+  stopBellWatch();
   // le gate se réaffiche automatiquement (voir auth.js)
 }
 
