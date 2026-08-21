@@ -13,6 +13,9 @@
 // imprimantes thermiques Bluetooth qui ne s'installent pas comme
 // imprimante système (type ATPOS), l'appli Android RawBT capte
 // l'impression du site et la reformate pour l'imprimante thermique.
+//
+// Design du reçu : voir css/receipt.css (bandeau accent, badge de statut,
+// tampon "PAYÉ" en filigrane, code-barres en CSS pur).
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
@@ -134,13 +137,16 @@ function fillForm(p) {
 }
 
 // --------------------------------------------------------------------------
-// Reçu imprimable
+// Reçu imprimable — design : bandeau accent, badge de statut, tampon
+// "PAYÉ" en filigrane quand le solde est soldé, code-barres en CSS.
+// Styles dans css/receipt.css.
 // --------------------------------------------------------------------------
 
 function buildReceiptHtml(p) {
   const currency = state.school?.currency || "FCFA";
   const s = p.student_id ? studentById(p.student_id) : null;
   const rest = Number(p.amount_due) - Number(p.amount_paid);
+  const isPaid = rest <= 0;
   const reference = (p.id || "").slice(0, 8).toUpperCase();
   const dateStr = p.payment_date
     ? new Date(p.payment_date).toLocaleDateString("fr-FR")
@@ -159,6 +165,9 @@ function buildReceiptHtml(p) {
 
   return `
     <div class="receipt">
+      <div class="receipt-accent"></div>
+      ${isPaid ? `<div class="receipt-stamp">Payé</div>` : ""}
+
       <div class="receipt-head">
         <div class="receipt-icon">🧾</div>
         <b class="receipt-school">${escapeHtml(state.school?.name || "Établissement")}</b>
@@ -166,7 +175,12 @@ function buildReceiptHtml(p) {
         ${state.school?.address ? `<div class="receipt-contact">${escapeHtml(state.school.address)}</div>` : ""}
       </div>
 
-      <div class="receipt-title">Reçu de paiement</div>
+      <div class="receipt-title-row">
+        <div class="receipt-title">Reçu de paiement</div>
+        <span class="receipt-badge ${isPaid ? "receipt-badge-green" : "receipt-badge-orange"}">
+          ${isPaid ? "Payé" : "Partiel"}
+        </span>
+      </div>
 
       <div class="receipt-meta">
         <span>N° ${escapeHtml(reference)}</span>
@@ -193,8 +207,8 @@ function buildReceiptHtml(p) {
       <div class="receipt-sep"></div>
 
       <div class="receipt-footer">
-        <div>Merci de votre confiance</div>
-        <div class="receipt-barcode">‖▌│▌‖│▌▌│‖▌│▌‖▌│‖▌</div>
+        <div class="receipt-thanks">Merci de votre confiance</div>
+        <div class="receipt-barcode" aria-hidden="true"></div>
         <div class="receipt-ref-small">${escapeHtml(reference)}</div>
       </div>
     </div>
