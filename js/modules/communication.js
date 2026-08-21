@@ -5,9 +5,8 @@
 // ==========================================================================
 import { listRows, insertRow } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
-
+import { refreshBell } from "./notifications.js";
 const el = (id) => document.getElementById(id);
-
 export async function refresh() {
   const rows = await listRows("messages", { orderBy: "created_at", ascending: false });
   el("messagesBody").innerHTML =
@@ -22,8 +21,8 @@ export async function refresh() {
     </tr>`
       )
       .join("") || `<tr><td colspan="5" class="empty">Aucun message envoyé pour le moment.</td></tr>`;
+  await refreshBell();
 }
-
 export function mount() {
   el("openAddMessage")?.addEventListener("click", () => {
     el("messageForm")?.reset();
