@@ -13,9 +13,6 @@
 // imprimantes thermiques Bluetooth qui ne s'installent pas comme
 // imprimante système (type ATPOS), l'appli Android RawBT capte
 // l'impression du site et la reformate pour l'imprimante thermique.
-//
-// Design du reçu : voir css/receipt.css (bandeau accent, badge de statut,
-// tampon "PAYÉ" en filigrane, code-barres en CSS pur).
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
@@ -137,16 +134,13 @@ function fillForm(p) {
 }
 
 // --------------------------------------------------------------------------
-// Reçu imprimable — design : bandeau accent, badge de statut, tampon
-// "PAYÉ" en filigrane quand le solde est soldé, code-barres en CSS.
-// Styles dans css/receipt.css.
+// Reçu imprimable
 // --------------------------------------------------------------------------
 
 function buildReceiptHtml(p) {
   const currency = state.school?.currency || "FCFA";
   const s = p.student_id ? studentById(p.student_id) : null;
   const rest = Number(p.amount_due) - Number(p.amount_paid);
-  const isPaid = rest <= 0;
   const reference = (p.id || "").slice(0, 8).toUpperCase();
   const dateStr = p.payment_date
     ? new Date(p.payment_date).toLocaleDateString("fr-FR")
@@ -165,9 +159,6 @@ function buildReceiptHtml(p) {
 
   return `
     <div class="receipt">
-      <div class="receipt-accent"></div>
-      ${isPaid ? `<div class="receipt-stamp">Payé</div>` : ""}
-
       <div class="receipt-head">
         <div class="receipt-icon">🧾</div>
         <b class="receipt-school">${escapeHtml(state.school?.name || "Établissement")}</b>
@@ -175,12 +166,7 @@ function buildReceiptHtml(p) {
         ${state.school?.address ? `<div class="receipt-contact">${escapeHtml(state.school.address)}</div>` : ""}
       </div>
 
-      <div class="receipt-title-row">
-        <div class="receipt-title">Reçu de paiement</div>
-        <span class="receipt-badge ${isPaid ? "receipt-badge-green" : "receipt-badge-orange"}">
-          ${isPaid ? "Payé" : "Partiel"}
-        </span>
-      </div>
+      <div class="receipt-title">Reçu de paiement</div>
 
       <div class="receipt-meta">
         <span>N° ${escapeHtml(reference)}</span>
@@ -207,8 +193,8 @@ function buildReceiptHtml(p) {
       <div class="receipt-sep"></div>
 
       <div class="receipt-footer">
-        <div class="receipt-thanks">Merci de votre confiance</div>
-        <div class="receipt-barcode" aria-hidden="true"></div>
+        <div>Merci de votre confiance</div>
+        <div class="receipt-barcode">‖▌│▌‖│▌▌│‖▌│▌‖▌│‖▌</div>
         <div class="receipt-ref-small">${escapeHtml(reference)}</div>
       </div>
     </div>
@@ -223,6 +209,94 @@ function openReceipt(paymentId) {
   openModal("receiptModal");
 }
 
+function paymentExportRows() {
+  const currency = state.school?.currency || "FCFA";
+  return (state.cache.payments || []).map((p) => {
+    const rest = Number(p.amount_due) - Number(p.amount_paid);
+    const s = p.student_id ? studentById(p.student_id) : null;
+    return {
+      "Élève": p.student_name || "",
+      "Parent": s?.parent_name || "—",
+      "Motif": p.reason || "",
+      "Montant dû": Number(p.amount_due) || 0,
+      "Payé": Number(p.amount_paid) || 0,
+      "Reste": Math.max(0, rest),
+      "Date": p.payment_date || "",
+      "Statut": rest > 0 ? "Partiel" : p.status || "",
+      "Moyen": p.method || "",
+    };
+  });
+}
+
+function exportPaymentsToExcel() {
+  const rows = paymentExportRows();
+  if (!rows.length) {
+    toast("Aucun paiement à exporter.");
+    return;
+  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Paiements");
+  XLSX.writeFile(wb, "paiements.xlsx");
+}
+
+async function exportPaymentsToWord() {
+  const rows = paymentExportRows();
+  if (!rows.length) {
+    toast("Aucun paiement à exporter.");
+    return;
+  }
+
+  const { Document, Packer, Table, TableRow, TableCell, Paragraph, TextRun, WidthType } = docx;
+
+  const headers = Object.keys(rows[0]);
+
+  const headerRow = new TableRow({
+    children: headers.map(
+      (h) =>
+        new TableCell({
+          width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+          children: [new Paragraph({ children: [new TextRun({ text: h, bold: true })] })],
+        })
+    ),
+  });
+
+  const dataRows = rows.map(
+    (r) =>
+      new TableRow({
+        children: headers.map(
+          (h) =>
+            new TableCell({
+              width: { size: 100 / headers.length, type: WidthType.PERCENTAGE },
+              children: [new Paragraph(String(r[h] ?? ""))],
+            })
+        ),
+      })
+  );
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [new TextRun({ text: `Paiements — ${state.school?.name || ""}`, bold: true, size: 28 })],
+          }),
+          new Paragraph({ text: "" }),
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "paiements.docx";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function mount() {
   el("openAddPayment")?.addEventListener("click", () => {
     resetForm();
@@ -233,6 +307,9 @@ export function mount() {
   el("printReceiptBtn")?.addEventListener("click", () => {
     window.print();
   });
+
+  el("exportPaymentsExcel")?.addEventListener("click", exportPaymentsToExcel);
+  el("exportPaymentsWord")?.addEventListener("click", exportPaymentsToWord);
 
   el("fPayStudent")?.addEventListener("change", () => {
     updateParentLine();
