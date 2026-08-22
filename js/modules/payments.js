@@ -15,7 +15,7 @@
 // l'impression du site et la reformate pour l'imprimante thermique.
 // ==========================================================================
 import { listRows, insertRow, updateRow, deleteRow, state } from "../state.js";
-import { toast, openModal, closeModal, escapeHtml, fmtMoney } from "../ui.js";
+import { toast, openModal, closeModal, escapeHtml, fmtMoney, showPage } from "../ui.js";
 import { computeCollectionsRows } from "./feeCalc.js";
 import { exportStyledDocx } from "./docxExport.js";
 
@@ -251,6 +251,11 @@ async function exportPaymentsToWord() {
 }
 
 export function mount() {
+  document.querySelector('#payments [data-nav="collections"]')?.addEventListener("click", (e) => {
+    e.preventDefault();
+    showPage("collections");
+  });
+
   el("openAddPayment")?.addEventListener("click", () => {
     resetForm();
     openModal("paymentModal");
