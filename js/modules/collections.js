@@ -79,6 +79,10 @@ export function render() {
       .map((r) => {
         const s = r.student;
         const badge = r.remaining > 0 ? '<span class="badge red">En retard</span>' : '<span class="badge green">À jour</span>';
+        const otherPaidHint =
+          r.remaining > 0 && r.otherRecentPayment
+            ? `<br><span class="badge" style="background:#eef2ff;color:#4338ca;font-size:11px;margin-top:4px;display:inline-block">💳 A payé ${escapeHtml(r.otherRecentPayment.reason)} le ${escapeHtml(r.otherRecentPayment.date)}</span>`
+            : "";
         return `<tr>
         <td><b>${escapeHtml(s.name)}</b></td>
         <td>${escapeHtml(s.class_name || "—")}</td>
@@ -89,7 +93,7 @@ export function render() {
         <td>${fmtMoney(r.paid, currency)}</td>
         <td><b>${fmtMoney(Math.max(0, r.remaining), currency)}</b></td>
         <td>${escapeHtml(r.lastMethod || "—")}</td>
-        <td>${badge}</td>
+        <td>${badge}${otherPaidHint}</td>
       </tr>`;
       })
       .join("") || `<tr><td colspan="10" class="empty">Aucun élève ne correspond à ce filtre.</td></tr>`;
