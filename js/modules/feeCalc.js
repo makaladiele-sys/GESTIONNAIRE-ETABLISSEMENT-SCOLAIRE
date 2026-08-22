@@ -36,6 +36,21 @@ export function computeCollectionsRows() {
       if (!(key in lastMethodByStudent)) lastMethodByStudent[key] = p.method;
     });
 
+  // Dernier paiement d'un AUTRE motif (Inscription, Blouses, etc.), gardé à
+  // titre purement informatif pour l'affichage — n'entre dans aucun total.
+  // Sert à éviter qu'un élève ayant réglé autre chose récemment paraisse
+  // n'avoir "rien payé du tout" quand il apparaît en retard de scolarité.
+  const otherPaymentByStudent = {};
+  payments
+    .filter((p) => p.reason !== "Scolarité")
+    .forEach((p) => {
+      const key = p.student_id || `name:${p.student_name}`;
+      const existing = otherPaymentByStudent[key];
+      if (!existing || new Date(p.payment_date) > new Date(existing.date)) {
+        otherPaymentByStudent[key] = { reason: p.reason, date: p.payment_date, amount: Number(p.amount_paid || 0) };
+      }
+    });
+
   return students.map((s) => {
     // Priorité au frais propre à l'élève (renseigné sur sa fiche) ; à
     // défaut, on retombe sur le frais de sa classe.
@@ -53,6 +68,7 @@ export function computeCollectionsRows() {
       paid,
       remaining,
       lastMethod: lastMethodByStudent[s.id] ?? lastMethodByStudent[`name:${s.name}`] ?? null,
+      otherRecentPayment: otherPaymentByStudent[s.id] ?? otherPaymentByStudent[`name:${s.name}`] ?? null,
       configured: fee > 0,
     };
   });
