@@ -1,685 +1,118 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Chift Digital Academy — ERP/SIS scolaire multi-établissements">
-<title>Chift Digital Academy</title>
-<link rel="icon" type="image/png" href="assets/logo.png">
-<link rel="stylesheet" href="css/styles.css">
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body class="auth-locked">
+// ==========================================================================
+// Communication : notifications internes envoyées aux parents/enseignants.
+// Canal "Email" : envoi réel via la Supabase Edge Function "send-email"
+// (Gmail SMTP côté serveur — voir sql/notification_reads_migration.sql et
+// send-email-function.ts). Les canaux SMS / WhatsApp restent à configurer.
+// ==========================================================================
+import { listRows, insertRow, state } from "../state.js";
+import { getSupabase } from "../supabaseClient.js";
+import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
+import { refreshBell } from "./notifications.js";
 
-<!-- ================================================================ AUTH GATE -->
-<div id="authGate">
-  <div id="authCard">
-    <img src="assets/logo.png" alt="Chift Digital Academy" class="brand-mark">
-    <h1 id="authTitle">Chift Digital Academy</h1>
-    <p class="sub" id="authSubtitle">Connexion sécurisée à votre établissement</p>
+const el = (id) => document.getElementById(id);
 
-    <div id="authLoginFields">
-      <label for="authEmail">Adresse e-mail</label>
-      <input id="authEmail" type="email" autocomplete="username" placeholder="admin@ecole.sn">
-      <label for="authPassword">Mot de passe</label>
-      <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••">
-      <button id="authLoginBtn" class="auth-btn" type="button">Se connecter</button>
-      <button id="authForgotBtn" class="auth-link-btn" type="button">Mot de passe oublié ?</button>
-    </div>
+export async function refresh() {
+  const rows = await listRows("messages", { orderBy: "created_at", ascending: false });
+  el("messagesBody").innerHTML =
+    rows
+      .map(
+        (m) => `<tr>
+      <td>${new Date(m.created_at).toLocaleDateString("fr-FR")}</td>
+      <td><span class="badge blue">${escapeHtml(m.channel)}</span></td>
+      <td>${escapeHtml(m.audience)}</td>
+      <td>${escapeHtml((m.body || "").slice(0, 60))}${(m.body || "").length > 60 ? "…" : ""}</td>
+      <td><span class="badge ${m.status === "Échec" ? "red" : "green"}">${escapeHtml(m.status)}</span></td>
+    </tr>`
+      )
+      .join("") || `<tr><td colspan="5" class="empty">Aucun message envoyé pour le moment.</td></tr>`;
+  await refreshBell();
+}
 
-    <div id="authSignupFields" style="display:none">
-      <label for="authSignupSchoolName">Nom de l'établissement</label>
-      <input id="authSignupSchoolName" type="text" placeholder="Ex. École Al Maghreb">
-      <label for="authSignupEmail">E-mail de l'administrateur</label>
-      <input id="authSignupEmail" type="email" autocomplete="username" placeholder="admin@monecole.sn">
-      <label for="authSignupPhone">Téléphone</label>
-      <input id="authSignupPhone" type="tel" placeholder="+221 77 000 00 00">
-      <label for="authSignupPassword">Mot de passe</label>
-      <input id="authSignupPassword" type="password" autocomplete="new-password" placeholder="8 caractères minimum">
-      <div class="notice">🎁 15 jours d'essai gratuit dès l'activation de votre compte par la plateforme.</div>
-      <button id="authSignupBtn" class="auth-btn" type="button">Créer mon établissement</button>
-      <div id="authSignupSuccess" style="display:none;margin-top:14px;padding:11px 13px;border-radius:9px;background:var(--success-soft);color:var(--success);font-size:13.5px"></div>
-    </div>
+// --------------------------------------------------------------------------
+// Résolution des destinataires email selon l'audience choisie.
+// --------------------------------------------------------------------------
 
-    <div id="authError"></div>
-    <div id="authLoading">Connexion en cours…</div>
+async function collectParentEmails() {
+  if (!state.cache.parents) await listRows("parents");
+  return (state.cache.parents || [])
+    .map((p) => (p.email || "").trim())
+    .filter(Boolean);
+}
 
-    <div id="authRecovery" style="display:none;margin-top:18px">
-      <label for="authNewPassword">Nouveau mot de passe</label>
-      <input id="authNewPassword" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe">
-      <button id="authUpdatePasswordBtn" class="auth-btn" type="button">Enregistrer le nouveau mot de passe</button>
-    </div>
+async function collectTeacherEmails() {
+  try {
+    const teachers = await listRows("profiles", { filters: { role: "teacher" } });
+    return (teachers || []).map((t) => (t.email || "").trim()).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
 
-    <button id="authToggleToSignup" class="auth-toggle" type="button">Nouveau ? Inscrire mon établissement</button>
-    <button id="authToggleToLogin" class="auth-toggle" type="button" style="display:none">← Retour à la connexion</button>
-  </div>
-</div>
+async function resolveEmailRecipients(audience) {
+  if (audience === "Parents") return collectParentEmails();
+  if (audience === "Élèves") return collectParentEmails(); // pas d'email propre à l'élève — le parent reçoit à sa place
+  if (audience === "Enseignants") return collectTeacherEmails();
+  // "Toute l'école"
+  const [parents, teachers] = await Promise.all([collectParentEmails(), collectTeacherEmails()]);
+  return [...new Set([...parents, ...teachers])];
+}
 
-<!-- ================================================================ APP SHELL -->
-<div class="app">
-  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <img src="assets/logo.png" alt="Chift Digital Academy" class="brand-mark">
-      <div><h1>CHIFT DIGITAL ACADEMY</h1><small>ERP • SIS • FINANCE • SAAS</small></div>
-    </div>
-    <div class="tenant-card" id="tenantCard"><b>Établissement</b><small>Chargement…</small></div>
+async function sendRealEmail(audience, body) {
+  const recipients = await resolveEmailRecipients(audience);
+  if (!recipients.length) {
+    return { ok: false, error: "Aucune adresse email trouvée pour cette audience." };
+  }
 
-    <nav class="nav">
-      <div class="nav-title">Pilotage</div>
-      <button data-page="dashboard" class="active"><span class="ic">▦</span> Tableau de bord</button>
-      <button data-page="students"><span class="ic">👨‍🎓</span> Élèves</button>
-      <button data-page="parents"><span class="ic">👨‍👩‍👧</span> Parents / Tuteurs</button>
-      <button data-page="teachers"><span class="ic">👨‍🏫</span> Enseignants & RH</button>
+  const sb = getSupabase();
+  const { data, error } = await sb.functions.invoke("send-email", {
+    body: {
+      to: recipients,
+      subject: `${state.school?.name || "École"} — Notification`,
+      body,
+      schoolName: state.school?.name || "",
+    },
+  });
 
-      <div class="nav-title">Pédagogie</div>
-      <button data-page="classes"><span class="ic">📚</span> Niveaux & Classes</button>
-      <button data-page="subjects"><span class="ic">📘</span> Matières</button>
-      <button data-page="grades"><span class="ic">📝</span> Notes & Gradebook</button>
-      <button data-page="bulletins"><span class="ic">📄</span> Bulletins</button>
-      <button data-page="attendance"><span class="ic">📅</span> Présences</button>
+  if (error) return { ok: false, error: error.message || "Échec de l'envoi." };
+  if (data?.error) return { ok: false, error: data.error };
+  return { ok: true, sent: data?.sent || 0, failed: data?.failed || 0, total: data?.total || recipients.length };
+}
 
-      <div class="nav-title">Finance & Administration</div>
-      <button data-page="payments"><span class="ic">💰</span> Facturation & Paiements</button>
-      <button data-page="collections"><span class="ic">📐</span> Recouvrement</button>
-      <button data-page="cash"><span class="ic">🏦</span> Caisse & Dépenses</button>
-      <button data-page="reports"><span class="ic">📊</span> Rapports</button>
-      <button data-page="communication"><span class="ic">📣</span> Communication</button>
+export function mount() {
+  el("openAddMessage")?.addEventListener("click", () => {
+    el("messageForm")?.reset();
+    openModal("messageModal");
+  });
 
-      <div class="nav-title">Système</div>
-      <button data-page="users"><span class="ic">👥</span> Utilisateurs & Rôles</button>
-      <button data-page="settings"><span class="ic">⚙️</span> Paramètres établissement</button>
-      <button data-page="superadmin" id="navSuperAdmin" style="display:none"><span class="ic">🛡️</span> Super Admin</button>
-    </nav>
+  el("messageForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const channel = el("fMsgChannel").value;
+    const audience = el("fMsgAudience").value;
+    const body = el("fMsgBody").value.trim();
 
-    <div class="sidebar-footer">
-      <div class="user-mini">
-        <div class="avatar">👤</div>
-        <div><b id="userBadgeName">Utilisateur</b><br><small id="userBadgeRole">—</small></div>
-      </div>
-      <button class="logout-btn" id="logoutBtn" title="Déconnexion">⏻</button>
-    </div>
-  </aside>
+    let status = "Envoyé";
 
-  <main class="main">
-    <header class="topbar">
-      <div class="top-left">
-        <button class="menu-btn icon-btn" id="menuBtn">☰</button>
-        <span class="page-title-mobile" id="pageTitleMobile">Tableau de bord</span>
-        <input class="search" id="globalSearch" placeholder="Recherche : élève, parent, paiement…">
-      </div>
-      <div class="top-actions">
-        <div class="notif-wrap" id="notifWrap">
-          <button class="icon-btn" id="notifBellBtn" title="Notifications">
-            🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
-          </button>
-          <div class="notif-panel" id="notifPanel" style="display:none">
-            <div class="notif-panel-head">Notifications</div>
-            <div class="notif-list" id="notifList"></div>
-          </div>
-        </div>
-      </div>
-    </header>
+    try {
+      if (channel === "Email") {
+        toast("Envoi des emails en cours…");
+        const result = await sendRealEmail(audience, body);
+        if (!result.ok) {
+          status = "Échec";
+          toast("Erreur d'envoi : " + result.error);
+        } else if (result.failed > 0) {
+          status = `Envoyé (${result.sent}/${result.total})`;
+          toast(`${result.sent} email(s) envoyé(s), ${result.failed} échec(s).`);
+        } else {
+          toast(`${result.sent} email(s) envoyé(s).`);
+        }
+      }
 
-    <section class="content">
-
-      <!-- ============================================================ DASHBOARD -->
-      <div class="page active" id="dashboard">
-        <div class="page-head">
-          <div><h2>Tableau de bord décisionnel</h2><p>Vue consolidée de l'établissement, des élèves, de la pédagogie et des finances.</p></div>
-          <button class="btn btn-primary" id="dashGoStudents">＋ Nouvel élève</button>
-        </div>
-        <div class="stats">
-          <div class="stat"><div><div class="label">Élèves inscrits</div><div class="value" id="statStudents">0</div><div class="trend">Suivi annuel</div></div><div class="stat-icon">👨‍🎓</div></div>
-          <div class="stat"><div><div class="label">Enseignants</div><div class="value" id="statTeachers">0</div><div class="trend">Personnel actif</div></div><div class="stat-icon">👨‍🏫</div></div>
-          <div class="stat"><div><div class="label">Recettes</div><div class="value" id="statRevenue">0</div><div class="trend">Paiements enregistrés</div></div><div class="stat-icon">💰</div></div>
-          <div class="stat"><div><div class="label">Impayés</div><div class="value" id="statDebt">0</div><div class="trend down">À recouvrer</div></div><div class="stat-icon">⚠️</div></div>
-          <div class="stat"><div><div class="label">Classes</div><div class="value" id="statClasses">0</div><div class="trend">Actives</div></div><div class="stat-icon">🏫</div></div>
-        </div>
-        <div class="grid2">
-          <div class="card">
-            <div class="card-head"><h3>Répartition par cycle</h3><span class="muted">Classes</span></div>
-            <div class="kpi" id="dashCycles"></div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Alertes de gestion</h3></div>
-            <div id="dashAlerts"></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>Derniers élèves inscrits</h3></div>
-          <div class="table-wrap"><table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Parent</th><th>Statut</th></tr></thead><tbody id="recentStudents"></tbody></table></div>
-        </div>
-      </div>
-
-      <!-- ============================================================ STUDENTS -->
-      <div class="page" id="students">
-        <div class="page-head">
-          <div><h2>Gestion des élèves</h2><p>Inscriptions, historique et informations de contact.</p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-light" onclick="document.getElementById('importStudentsInput').click()">📥 Import Excel</button>
-            <button class="btn btn-primary" id="openAddStudent">＋ Ajouter</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="toolbar">
-            <div class="filters">
-              <input id="studentSearch" placeholder="Rechercher nom, matricule…">
-              <select id="classFilter"><option value="">Toutes les classes</option></select>
-            </div>
-            <button class="btn btn-light" id="exportStudentsExcel">⬇ Excel</button>
-            <button class="btn btn-light" id="exportStudentsWord">⬇ Word</button>
-          </div>
-          <input id="importStudentsInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Matricule</th><th>Élève</th><th>Classe</th><th>Parent(s)</th><th>Téléphone</th><th>Frais mensuel</th><th>Statut</th><th>Action</th></tr></thead>
-            <tbody id="studentsBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ PARENTS -->
-      <div class="page" id="parents">
-        <div class="page-head">
-          <div><h2>Parents / Tuteurs</h2><p>Générée automatiquement à l'inscription des élèves — contacts, enfants liés et soldes.</p></div>
-          <button class="btn btn-primary" id="openAddParent">＋ Parent sans élève inscrit</button>
-          <button class="btn btn-light" id="exportParentsExcel">⬇ Excel</button>
-          <button class="btn btn-light" id="exportParentsWord">⬇ Word</button>
-        </div>
-        <div class="card">
-          <div class="notice">💡 Cette liste se remplit automatiquement : le nom, le téléphone et l'email du parent sont saisis une seule fois, sur la fiche de l'élève (page "Élèves"). Utilisez "Modifier" ici seulement pour ajuster le frais mensuel d'un enfant ou regrouper des frères/sœurs sous un même parent.</div>
-          <div class="filters"><input id="parentSearch" placeholder="Rechercher parent ou enfant…"></div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Parent/Tuteur</th><th>Téléphone</th><th>Email</th><th>Enfant(s)</th><th>Solde</th><th>Action</th></tr></thead>
-            <tbody id="parentsBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ TEACHERS -->
-      <div class="page" id="teachers">
-        <div class="page-head">
-          <div><h2>Enseignants & Ressources humaines</h2><p>Personnel, affectations, heures et contrats.</p></div>
-          <button class="btn btn-primary" id="openAddTeacher">＋ Ajouter</button>
-        </div>
-        <div class="stats">
-          <div class="stat"><div><div class="label">Heures cumulées</div><div class="value" id="statTeacherHours">0 h</div></div><div class="stat-icon">⏱️</div></div>
-        </div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Matricule</th><th>Enseignant</th><th>Spécialité</th><th>Classes</th><th>Contrat</th><th>Heures</th><th>État</th><th>Action</th></tr></thead>
-            <tbody id="teachersBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ CLASSES -->
-      <div class="page" id="classes">
-        <div class="page-head">
-          <div><h2>Niveaux & Classes</h2><p>De la maternelle à la terminale : effectifs et affectation.</p></div>
-          <button class="btn btn-primary" id="openAddClass">＋ Nouvelle classe</button>
-        </div>
-        <div class="stats" id="classSummaryStats"></div>
-        <div class="card">
-          <div class="filters">
-            <select id="classCycleFilter">
-              <option value="">Tous les cycles</option>
-              <option value="Préscolaire">Préscolaire</option>
-              <option value="Primaire">Primaire</option>
-              <option value="Moyen">Moyen</option>
-              <option value="Secondaire">Secondaire</option>
-            </select>
-          </div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Cycle</th><th>Niveau</th><th>Classe</th><th>Effectif</th><th>Frais mensuel</th><th>Salle</th><th>Prof. principal</th><th>Action</th></tr></thead>
-            <tbody id="classesBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ SUBJECTS -->
-      <div class="page" id="subjects">
-        <div class="page-head">
-          <div><h2>Catalogue des matières</h2><p>Coefficients, volumes horaires et enseignants.</p></div>
-          <button class="btn btn-primary" id="openAddSubject">＋ Ajouter une matière</button>
-        </div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Code</th><th>Matière</th><th>Cycle</th><th>Coefficient</th><th>Volume</th><th>Enseignant</th><th>Action</th></tr></thead>
-            <tbody id="subjectsBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ GRADES -->
-      <div class="page" id="grades">
-        <div class="page-head">
-          <div><h2>Notes & Gradebook</h2><p>Devoir 1, Devoir 2, Devoir 3, Composition — chaque enseignant ne voit que ses classes et matières.</p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-light" onclick="document.getElementById('importGradesInput').click()">📥 Import Excel</button>
-            <button class="btn btn-primary" id="openAddGrade">＋ Saisir une note</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>Suivi des envois</h3><span class="muted">Classe + matière + période envoyées au directeur</span></div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Classe</th><th>Matière</th><th>Période</th><th>Statut</th><th>Action</th></tr></thead>
-            <tbody id="submissionsBody"></tbody></table>
-          </div>
-        </div>
-        <div class="card">
-          <input id="importGradesInput" type="file" accept=".xlsx,.xls,.csv" style="display:none">
-          <div class="toolbar">
-            <div class="filters">
-              <input id="gradeSearch" placeholder="Élève / classe / matière…">
-              <select id="gradePeriod"><option>Toutes périodes</option><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
-            </div>
-            <button class="btn btn-light" id="downloadGradeTemplate">📄 Modèle Excel</button>
-          </div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Matière</th><th>Type</th><th>Note</th><th>Coef.</th><th>Période</th><th>Action</th></tr></thead>
-            <tbody id="gradesBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ BULLETINS -->
-      <div class="page" id="bulletins">
-        <div class="page-head">
-          <div><h2>Bulletins scolaires</h2><p>Générés automatiquement à partir des notes saisies, prêts à imprimer.</p></div>
-        </div>
-        <div class="card">
-          <div class="filters">
-            <input id="bulletinSearch" placeholder="Rechercher un élève…">
-            <select id="bulletinPeriod"><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
-          </div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Matricule</th><th>Classe</th><th>Moyenne</th><th>Appréciation</th><th>Reçu</th><th>Action</th></tr></thead>
-            <tbody id="bulletinsBody"></tbody></table>
-          </div>
-        </div>
-        <div id="bulletinPreview"></div>
-      </div>
-
-      <!-- ============================================================ ATTENDANCE -->
-      <div class="page" id="attendance">
-        <div class="page-head">
-          <div><h2>Présences & assiduité</h2><p>Faites l'appel par classe et consultez la liste des absents, jour par jour.</p></div>
-          <button class="btn btn-primary" id="openAddAttendance">📋 Faire l'appel</button>
-        </div>
-        <div class="grid3">
-          <div class="card"><div class="label">Présents (ce jour)</div><div class="value" id="attPresent">0</div></div>
-          <div class="card"><div class="label">Absents (ce jour)</div><div class="value" id="attAbsent">0</div></div>
-          <div class="card"><div class="label">Retards (ce jour)</div><div class="value" id="attLate">0</div></div>
-        </div>
-        <div class="card">
-          <div class="filters">
-            <input id="fAttFilterDate" type="date">
-            <select id="attClassFilter"><option value="">Toutes les classes</option></select>
-            <select id="attStatusFilter">
-              <option value="Absent">Absents</option>
-              <option value="">Tous les statuts</option>
-              <option value="Présent">Présents</option>
-              <option value="Retard">Retards</option>
-            </select>
-          </div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Statut</th><th>Date</th></tr></thead>
-            <tbody id="attendanceBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ PAYMENTS -->
-      <div class="page" id="payments">
-        <div class="page-head">
-          <div><h2>Facturation & Paiements</h2><p>Mensualités, échéances et reçus.</p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary" id="openAddPayment">＋ Encaisser un paiement</button>
-            <button class="btn btn-light" id="exportPaymentsExcel">⬇ Excel</button>
-            <button class="btn btn-light" id="exportPaymentsWord">⬇ Word</button>
-          </div>
-        </div>
-        <div class="notice">💡 Ces totaux (scolarité uniquement) sont calculés exactement comme dans <b>Recouvrement</b> — les deux pages affichent toujours les mêmes chiffres.</div>
-        <div class="grid3">
-          <div class="card"><div class="label">Attendu (scolarité, cumulé)</div><div class="value" id="payDue">0</div></div>
-          <div class="card"><div class="label">Encaissé (scolarité)</div><div class="value" id="payPaid">0</div></div>
-          <div class="card"><div class="label">En retard (scolarité)</div><div class="value" id="payUnpaid">0</div></div>
-        </div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Parent</th><th>Motif</th><th>Montant dû</th><th>Payé</th><th>Reste</th><th>Date</th><th>Statut</th><th>Reçu</th><th>Action</th></tr></thead>
-            <tbody id="paymentsBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ COLLECTIONS -->
-      <div class="page" id="collections">
-        <div class="page-head">
-          <div><h2>Recouvrement</h2><p>Ce qui doit être recouvré (frais mensuel × mois écoulés depuis l'inscription) comparé à ce qui a réellement été payé, avec la liste nominative des retards.</p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-light" id="exportCollectionsExcel">⬇ Excel</button>
-            <button class="btn btn-light" id="exportCollectionsWord">⬇ Word</button>
-          </div>
-        </div>
-        <div class="notice warning" id="collectionsNotice" style="display:none"></div>
-        <div class="stats">
-          <div class="stat"><div><div class="label">Attendu (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
-          <div class="stat"><div><div class="label">Recouvré</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
-          <div class="stat"><div><div class="label">En retard</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
-          <div class="stat"><div><div class="label">Taux de recouvrement</div><div class="value" id="colRate">0%</div></div><div class="stat-icon">📊</div></div>
-        </div>
-        <div class="card">
-          <div class="filters">
-            <select id="colClassFilter"><option value="">Toutes les classes</option></select>
-            <select id="colStatusFilter">
-              <option value="overdue">En retard uniquement</option>
-              <option value="">Tous les élèves</option>
-              <option value="ok">À jour uniquement</option>
-            </select>
-            <input id="colSearch" placeholder="Rechercher élève ou parent…">
-          </div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Élève</th><th>Classe</th><th>Parent</th><th>Téléphone</th><th>Mois écoulés</th><th>Attendu</th><th>Payé</th><th>Reste (retard)</th><th>Dernier mode</th><th>Statut</th></tr></thead>
-            <tbody id="collectionsBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ CASH -->
-      <div class="page" id="cash">
-        <div class="page-head">
-          <div><h2>Caisse & Dépenses</h2><p>Entrées, sorties et suivi de trésorerie.</p></div>
-          <button class="btn btn-primary" id="openAddCash">＋ Nouvelle opération</button>
-        </div>
-        <div class="grid3">
-          <div class="card"><div class="label">Solde caisse</div><div class="value" id="cashBalance">0</div></div>
-          <div class="card"><div class="label">Recettes</div><div class="value" id="cashIncome">0</div></div>
-          <div class="card"><div class="label">Dépenses</div><div class="value" id="cashOutcome">0</div></div>
-        </div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Date</th><th>Type</th><th>Catégorie</th><th>Motif</th><th>Montant</th><th>Utilisateur</th></tr></thead>
-            <tbody id="cashBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ REPORTS -->
-      <div class="page" id="reports">
-        <div class="page-head"><div><h2>Centre de rapports</h2><p>Indicateurs clés et exports.</p></div></div>
-        <div class="card">
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary" id="generateReportBtn">📊 Générer</button>
-            <button class="btn btn-light" id="reportExportCSV">CSV</button>
-            <button class="btn btn-light" id="reportExportExcel">Excel</button>
-            <button class="btn btn-light" id="reportExportPdf">PDF / Imprimer</button>
-          </div>
-        </div>
-        <div class="card" id="reportResult"><div class="empty">Cliquez sur "Générer" pour produire le rapport.</div></div>
-      </div>
-
-      <!-- ============================================================ COMMUNICATION -->
-      <div class="page" id="communication">
-        <div class="page-head">
-          <div><h2>Communication</h2><p>Notifications internes envoyées aux parents, élèves ou enseignants.</p></div>
-          <button class="btn btn-primary" id="openAddMessage">＋ Nouveau message</button>
-        </div>
-        <div class="notice">📱 Les canaux <b>SMS</b>, <b>Email</b> et <b>Notification interne</b> (visible via la cloche 🔔) sont réellement fonctionnels. Le canal WhatsApp est pour l'instant seulement enregistré en historique, en attendant sa configuration.</div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Date</th><th>Canal</th><th>Audience</th><th>Message</th><th>Statut</th></tr></thead>
-            <tbody id="messagesBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ USERS -->
-      <div class="page" id="users">
-        <div class="page-head">
-          <div><h2>Utilisateurs & rôles</h2><p>Comptes rattachés à votre établissement.</p></div>
-          <button class="btn btn-primary" id="openInviteUser">＋ Inviter un utilisateur</button>
-        </div>
-        <div class="card">
-          <div class="notice">La personne invitée reçoit un e-mail pour choisir son mot de passe et accéder immédiatement à votre établissement, avec le rôle que vous lui attribuez.</div>
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th></tr></thead>
-            <tbody id="usersBody"></tbody></table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ SETTINGS -->
-      <div class="page" id="settings">
-        <div class="page-head">
-          <div><h2>Paramètres établissement</h2><p>Identité, année scolaire, devise et coordonnées.</p></div>
-          <button class="btn btn-primary" id="saveSettingsBtn">💾 Enregistrer</button>
-        </div>
-        <div class="card">
-          <div class="form-grid">
-            <div class="form-group"><label>Nom de l'établissement</label><input id="setSchool" class="form-control"></div>
-            <div class="form-group"><label>Année scolaire</label>
-              <select id="setYear" class="form-control"><option>2026-2027</option><option>2027-2028</option><option>2025-2026</option></select>
-            </div>
-            <div class="form-group"><label>Téléphone</label><input id="setPhone" class="form-control"></div>
-            <div class="form-group"><label>Email</label><input id="setEmail" type="email" class="form-control"></div>
-            <div class="form-group"><label>Devise</label>
-              <select id="setCurrency" class="form-control"><option>FCFA</option><option>EUR</option><option>USD</option></select>
-            </div>
-            <div class="form-group"><label>Fuseau horaire</label><input id="setTimezone" class="form-control"></div>
-            <div class="form-group full"><label>Adresse</label><textarea id="setAddress" class="form-control" rows="2"></textarea></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ SUPERADMIN -->
-      <div class="page" id="superadmin">
-        <div class="page-head">
-          <div><h2>Super Admin — Établissements</h2><p>Validez ou suspendez les établissements inscrits sur la plateforme.</p></div>
-          <button class="btn btn-light" id="refreshSuperAdmin">🔄 Actualiser</button>
-        </div>
-        <div class="stats" id="superAdminStats"></div>
-        <div class="card">
-          <div class="table-wrap">
-            <table class="table"><thead><tr><th>Établissement</th><th>Email admin</th><th>Téléphone</th><th>Créé le</th><th>Statut</th><th>Essai</th><th>Action</th></tr></thead>
-            <tbody id="superAdminBody"><tr><td colspan="7" class="empty">Chargement…</td></tr></tbody></table>
-          </div>
-        </div>
-      </div>
-
-    </section>
-  </main>
-</div>
-
-<!-- ================================================================ MODALS -->
-<div class="modal" id="studentModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="studentModalTitle">Nouvel élève</h3><button class="close" data-close-modal>×</button></div>
-  <form id="studentForm"><div class="form-grid">
-    <div class="form-group"><label>Nom et prénom *</label><input id="fStudentName" class="form-control" required></div>
-    <div class="form-group"><label>Matricule</label><input id="fStudentMat" class="form-control" placeholder="Automatique"></div>
-    <div class="form-group"><label>Classe *</label><select id="fStudentClass" class="form-control" required></select></div>
-    <div class="form-group"><label>Parent / Tuteur *</label><input id="fStudentParent" class="form-control" required></div>
-    <div class="form-group"><label>Téléphone parent *</label><input id="fStudentPhone" class="form-control" required></div>
-    <div class="form-group full"><label>Email parent</label><input id="fStudentParentEmail" type="email" class="form-control" placeholder="Optionnel"></div>
-    <div class="form-group full"><label>Frais mensuel (FCFA)</label><input id="fStudentFee" type="number" min="0" step="1" class="form-control" placeholder="Laisser vide pour utiliser le tarif de la classe"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="parentModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="parentModalTitle">Nouveau parent / tuteur</h3><button class="close" data-close-modal>×</button></div>
-  <form id="parentForm"><div class="form-grid">
-    <div class="form-group"><label>Nom complet *</label><input id="fParentName" class="form-control" required></div>
-    <div class="form-group"><label>Téléphone *</label><input id="fParentPhone" class="form-control" required></div>
-    <div class="form-group"><label>Email</label><input id="fParentEmail" class="form-control"></div>
-    <div class="form-group full">
-      <label>Enfant(s) déjà inscrit(s)</label>
-      <select id="fParentChildren" class="form-control" multiple size="4"></select>
-      <small class="muted">Optionnel — normalement rempli automatiquement à l'inscription de l'élève. Ctrl/Cmd + clic pour sélectionner plusieurs.</small>
-    </div>
-    <div class="form-group full" id="fParentFeesWrap"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="teacherModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="teacherModalTitle">Nouvel enseignant</h3><button class="close" data-close-modal>×</button></div>
-  <form id="teacherForm"><div class="form-grid">
-    <div class="form-group"><label>Nom complet *</label><input id="fTeacherName" class="form-control" required></div>
-    <div class="form-group"><label>Spécialité</label><input id="fTeacherSubject" class="form-control"></div>
-    <div class="form-group"><label>Type de contrat</label>
-      <select id="fTeacherContract" class="form-control"><option>Titulaire</option><option>Vacataire</option><option>Contractuel</option><option>Permanent</option><option>Intervenant</option></select>
-    </div>
-    <div class="form-group"><label>Classes affectées</label><input id="fTeacherClasses" class="form-control"></div>
-    <div class="form-group"><label>Heures / mois</label><input id="fTeacherHours" type="number" min="0" class="form-control" value="0"></div>
-    <div class="form-group"><label>Tarif horaire</label><input id="fTeacherRate" type="number" min="0" class="form-control"></div>
-    <div class="form-group full"><label>Téléphone</label><input id="fTeacherPhone" class="form-control"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="classModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="classModalTitle">Nouvelle classe</h3><button class="close" data-close-modal>×</button></div>
-  <form id="classForm"><div class="form-grid">
-    <div class="form-group"><label>Cycle</label>
-      <select id="fClassCycle" class="form-control"><option>Préscolaire</option><option>Primaire</option><option>Moyen</option><option>Secondaire</option></select>
-    </div>
-    <div class="form-group"><label>Niveau *</label><input id="fClassLevel" class="form-control" placeholder="Ex. 6e" required></div>
-    <div class="form-group"><label>Nom de la classe *</label><input id="fClassName" class="form-control" placeholder="Ex. 6ème A" required></div>
-    <div class="form-group"><label>Salle</label><input id="fClassRoom" class="form-control"></div>
-    <div class="form-group"><label>Frais mensuel (scolarité)</label><input id="fClassFee" type="number" min="0" step="500" class="form-control" placeholder="Ex. 15000"></div>
-    <div class="form-group full"><label>Professeur principal</label><input id="fClassTeacher" class="form-control"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="subjectModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="subjectModalTitle">Nouvelle matière</h3><button class="close" data-close-modal>×</button></div>
-  <form id="subjectForm"><div class="form-grid">
-    <div class="form-group"><label>Code</label><input id="fSubjectCode" class="form-control"></div>
-    <div class="form-group"><label>Nom *</label><input id="fSubjectName" class="form-control" required></div>
-    <div class="form-group"><label>Cycle</label><input id="fSubjectCycle" class="form-control"></div>
-    <div class="form-group"><label>Coefficient</label><input id="fSubjectCoef" type="number" min="0" step=".5" value="1" class="form-control"></div>
-    <div class="form-group"><label>Volume horaire</label><input id="fSubjectHours" class="form-control" placeholder="Ex. 4h/semaine"></div>
-    <div class="form-group"><label>Enseignant</label><input id="fSubjectTeacher" class="form-control"></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="gradeModal"><div class="modal-box">
-  <div class="modal-head"><h3>Saisie d'une note</h3><button class="close" data-close-modal>×</button></div>
-  <form id="gradeForm"><div class="form-grid">
-    <div class="form-group"><label>Classe *</label><select id="fGradeClass" class="form-control" required></select></div>
-    <div class="form-group"><label>Matière *</label><select id="fGradeSubject" class="form-control" required></select></div>
-    <div class="form-group full"><label>Élève *</label><select id="fGradeStudent" class="form-control" required></select></div>
-    <div class="form-group"><label>Type</label>
-      <select id="fGradeType" class="form-control">
-        <option value="Devoir 1">Devoir 1</option>
-        <option value="Devoir 2">Devoir 2</option>
-        <option value="Devoir 3">Devoir 3</option>
-        <option value="Composition">Composition</option>
-      </select>
-    </div>
-    <div class="form-group"><label>Note /20 *</label><input id="fGradeNote" type="number" min="0" max="20" step=".01" class="form-control" required></div>
-    <div class="form-group"><label>Coefficient</label><input id="fGradeCoef" type="number" min="0.1" step=".1" value="1" class="form-control">
-      <span class="hint">Ajustable librement — chaque matière peut avoir un coefficient différent.</span>
-    </div>
-    <div class="form-group"><label>Période</label>
-      <select id="fGradePeriod" class="form-control"><option>Trimestre 1</option><option>Trimestre 2</option><option>Trimestre 3</option></select>
-    </div>
-  </div>
-  <div id="gradeLockNotice" class="notice warning" style="display:none;margin-top:14px"></div>
-  <button class="btn btn-primary" style="margin-top:16px" id="saveGradeBtn">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="attendanceModal"><div class="modal-box">
-  <div class="modal-head"><h3>Faire l'appel</h3><button class="close" data-close-modal>×</button></div>
-  <div class="form-grid" style="margin-bottom:16px">
-    <div class="form-group"><label>Classe *</label><select id="fRollClass" class="form-control"></select></div>
-    <div class="form-group"><label>Date</label><input id="fRollDate" type="date" class="form-control"></div>
-  </div>
-  <div id="rollCallList" class="table-wrap" style="max-height:360px;overflow-y:auto"></div>
-  <button class="btn btn-primary" id="saveRollCallBtn" style="margin-top:16px">Enregistrer l'appel</button>
-</div></div>
-
-<div class="modal" id="paymentModal"><div class="modal-box">
-  <div class="modal-head"><h3 id="paymentModalTitle">Encaisser un paiement</h3><button class="close" data-close-modal>×</button></div>
-  <form id="paymentForm"><div class="form-grid">
-    <div class="form-group full"><label>Élève *</label><select id="fPayStudent" class="form-control" required></select></div>
-    <div class="form-group full" id="payParentLine"></div>
-    <div class="form-group"><label>Motif</label>
-      <select id="fPayReason" class="form-control"><option>Scolarité</option><option>Inscription</option><option>Cantine</option><option>Transport</option><option>Activité</option><option>Examen</option><option>Blouses</option><option>Dernier mois (avance)</option></select>
-    </div>
-    <div class="form-group"><label>Montant *</label><input id="fPayAmount" type="number" min="0" class="form-control" required>
-      <span class="hint" id="payAmountHint"></span>
-    </div>
-    <div class="form-group full"><label>Moyen</label>
-      <select id="fPayMethod" class="form-control"><option>Espèces</option><option>Wave / Mobile Money</option><option>Virement</option><option>Chèque</option><option>En ligne</option></select>
-    </div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Valider et générer le reçu</button></form>
-</div></div>
-
-<div class="modal" id="receiptModal"><div class="modal-box">
-  <div class="modal-head no-print"><h3>Reçu de paiement</h3><button class="close" data-close-modal>×</button></div>
-  <div id="receiptContent"></div>
-  <div class="no-print" style="display:flex;gap:8px;margin-top:16px">
-    <button class="btn btn-primary" id="printReceiptBtn">🖨 Imprimer</button>
-    <button class="btn btn-light" data-close-modal>Fermer</button>
-  </div>
-</div></div>
-
-<div class="modal" id="cashModal"><div class="modal-box">
-  <div class="modal-head"><h3>Opération de caisse</h3><button class="close" data-close-modal>×</button></div>
-  <form id="cashForm"><div class="form-grid">
-    <div class="form-group"><label>Type</label><select id="fCashType" class="form-control"><option>Dépense</option><option>Recette</option></select></div>
-    <div class="form-group"><label>Catégorie</label><input id="fCashCategory" class="form-control" placeholder="Ex. Fournitures"></div>
-    <div class="form-group"><label>Montant *</label><input id="fCashAmount" type="number" min="0" class="form-control" required></div>
-    <div class="form-group"><label>Date</label><input id="fCashDate" type="date" class="form-control"></div>
-    <div class="form-group full"><label>Motif</label><textarea id="fCashReason" class="form-control" rows="2"></textarea></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Enregistrer</button></form>
-</div></div>
-
-<div class="modal" id="messageModal"><div class="modal-box">
-  <div class="modal-head"><h3>Nouveau message</h3><button class="close" data-close-modal>×</button></div>
-  <form id="messageForm"><div class="form-grid">
-    <div class="form-group"><label>Canal</label>
-      <select id="fMsgChannel" class="form-control"><option>Notification interne</option><option>Email</option><option>SMS</option><option>WhatsApp</option></select>
-    </div>
-    <div class="form-group"><label>Audience</label>
-      <select id="fMsgAudience" class="form-control"><option>Parents</option><option>Élèves</option><option>Enseignants</option><option>Toute l'école</option></select>
-    </div>
-    <div class="form-group full"><label>Message *</label><textarea id="fMsgBody" class="form-control" rows="5" required></textarea></div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Envoyer</button></form>
-</div></div>
-
-<div class="modal" id="inviteUserModal"><div class="modal-box">
-  <div class="modal-head"><h3>Inviter un utilisateur</h3><button class="close" data-close-modal>×</button></div>
-  <form id="inviteUserForm"><div class="form-grid">
-    <div class="form-group full"><label>Nom complet *</label><input id="fInviteName" class="form-control" required></div>
-    <div class="form-group full"><label>E-mail *</label><input id="fInviteEmail" type="email" class="form-control" required></div>
-    <div class="form-group full"><label>Rôle *</label>
-      <select id="fInviteRole" class="form-control" required>
-        <option value="secretary">Secrétaire</option>
-        <option value="accountant">Comptable</option>
-        <option value="teacher">Enseignant</option>
-        <option value="parent">Parent</option>
-        <option value="student">Élève</option>
-        <option value="admin">Direction (co-administrateur)</option>
-      </select>
-      <span class="hint">La personne recevra un e-mail pour définir son mot de passe.</span>
-    </div>
-    <div class="form-group full" id="inviteAssignmentsWrap" style="display:none">
-      <label>Classes et matières enseignées *</label>
-      <div id="inviteAssignmentsList" style="display:flex;flex-direction:column;gap:8px"></div>
-      <button type="button" class="btn btn-light btn-sm" id="addAssignmentRow" style="margin-top:8px">＋ Ajouter une affectation</button>
-      <span class="hint">L'enseignant ne pourra saisir des notes que pour ces classes/matières précises.</span>
-    </div>
-  </div><button class="btn btn-primary" style="margin-top:16px">Envoyer l'invitation</button></form>
-</div></div>
-
-<div class="toast" id="toast"></div>
-
-<!-- Configuration Supabase : copiez js/config.example.js en js/config.js -->
-<script src="js/config.js" onerror="console.warn('js/config.js introuvable — copiez js/config.example.js')"></script>
-<script type="module" src="js/app.js"></script>
-</body>
-</html>
+      await insertRow("messages", { channel, audience, body, status });
+      if (channel !== "Email") toast("Message enregistré");
+      closeModal("messageModal");
+      await refresh();
+    } catch (err) {
+      toast("Erreur : " + err.message);
+    }
+  });
+}
