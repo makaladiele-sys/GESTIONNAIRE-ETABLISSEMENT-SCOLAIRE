@@ -3,8 +3,9 @@
 // ==========================================================================
 import { isConfigured } from "./supabaseClient.js";
 import { initAuth, setAuthCallbacks, logout } from "./auth.js";
-import { state, isPlatformAdmin } from "./state.js";
+import { state, isPlatformAdmin, checkTrialStatus } from "./state.js";
 import { showPage, setNavigateHandler, toggleSidebar, closeSidebar, toast } from "./ui.js";
+import { mountBell, refreshBell, resetReadCache } from "./modules/notifications.js";
 
 import * as dashboard from "./modules/dashboard.js";
 import * as students from "./modules/students.js";
@@ -23,6 +24,7 @@ import * as reports from "./modules/reports.js";
 import * as settingsModule from "./modules/settings.js";
 import * as usersModule from "./modules/users.js";
 import * as superadmin from "./modules/superadmin.js";
+import * as auditlog from "./modules/auditlog.js";
 
 const modules = {
   dashboard,
@@ -42,6 +44,7 @@ const modules = {
   settings: settingsModule,
   users: usersModule,
   superadmin,
+  auditlog,
 };
 
 let mounted = false;
@@ -64,6 +67,9 @@ async function refreshPage(id) {
 function applyRoleUI() {
   const navSuper = document.getElementById("navSuperAdmin");
   if (navSuper) navSuper.style.display = isPlatformAdmin() ? "flex" : "none";
+
+  const navAudit = document.getElementById("navAuditLog");
+  if (navAudit) navAudit.style.display = isPlatformAdmin() ? "flex" : "none";
 
   const badge = document.getElementById("userBadgeName");
   const roleBadge = document.getElementById("userBadgeRole");
@@ -117,6 +123,65 @@ function bindChrome() {
   });
 
   setNavigateHandler(refreshPage);
+  mountBell();
+}
+
+// --------------------------------------------------------------------------
+// Contrôle périodique de la période d'essai : coupe une session déjà
+// ouverte dès que l'essai expire, sans attendre une reconnexion.
+// --------------------------------------------------------------------------
+
+const TRIAL_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let _trialIntervalId = null;
+
+function startTrialWatch() {
+  stopTrialWatch();
+  if (isPlatformAdmin()) return; // le SuperAdmin n'est pas concerné
+
+  _trialIntervalId = setInterval(async () => {
+    const result = await checkTrialStatus();
+    if (!result.ok) {
+      stopTrialWatch();
+      toast(
+        result.reason === "trial_expired"
+          ? "⛔ Votre période d'essai de 15 jours est terminée."
+          : "⛔ Votre établissement a été suspendu."
+      );
+      await logout();
+    }
+  }, TRIAL_CHECK_INTERVAL_MS);
+}
+
+function stopTrialWatch() {
+  if (_trialIntervalId) {
+    clearInterval(_trialIntervalId);
+    _trialIntervalId = null;
+  }
+}
+
+// --------------------------------------------------------------------------
+// Rafraîchissement périodique de la cloche de notifications, pour que le
+// badge se mette à jour même si la personne reste sur la même page.
+// --------------------------------------------------------------------------
+
+const BELL_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+let _bellIntervalId = null;
+
+function startBellWatch() {
+  stopBellWatch();
+  if (isPlatformAdmin()) return;
+  _bellIntervalId = setInterval(() => {
+    // Force un nouveau chargement des messages pour capter les nouveaux envois.
+    state.cache.messages = null;
+    refreshBell();
+  }, BELL_CHECK_INTERVAL_MS);
+}
+
+function stopBellWatch() {
+  if (_bellIntervalId) {
+    clearInterval(_bellIntervalId);
+    _bellIntervalId = null;
+  }
 }
 
 async function onAuthenticated() {
@@ -124,9 +189,15 @@ async function onAuthenticated() {
   mountAllModules();
   const startPage = isPlatformAdmin() ? "superadmin" : "dashboard";
   showPage(startPage);
+  startTrialWatch();
+  await refreshBell();
+  startBellWatch();
 }
 
 function onSignedOut() {
+  stopTrialWatch();
+  stopBellWatch();
+  resetReadCache();
   // le gate se réaffiche automatiquement (voir auth.js)
 }
 
