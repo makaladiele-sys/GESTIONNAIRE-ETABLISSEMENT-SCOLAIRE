@@ -5,7 +5,7 @@ import { isConfigured } from "./supabaseClient.js";
 import { initAuth, setAuthCallbacks, logout } from "./auth.js";
 import { state, isPlatformAdmin, checkTrialStatus } from "./state.js";
 import { showPage, setNavigateHandler, toggleSidebar, closeSidebar, toast } from "./ui.js";
-import { mountBell, refreshBell } from "./modules/notifications.js";
+import { mountBell, refreshBell, resetReadCache } from "./modules/notifications.js";
 
 import * as dashboard from "./modules/dashboard.js";
 import * as students from "./modules/students.js";
@@ -24,6 +24,7 @@ import * as reports from "./modules/reports.js";
 import * as settingsModule from "./modules/settings.js";
 import * as usersModule from "./modules/users.js";
 import * as superadmin from "./modules/superadmin.js";
+import * as auditlog from "./modules/auditlog.js";
 
 const modules = {
   dashboard,
@@ -43,6 +44,7 @@ const modules = {
   settings: settingsModule,
   users: usersModule,
   superadmin,
+  auditlog,
 };
 
 let mounted = false;
@@ -65,6 +67,9 @@ async function refreshPage(id) {
 function applyRoleUI() {
   const navSuper = document.getElementById("navSuperAdmin");
   if (navSuper) navSuper.style.display = isPlatformAdmin() ? "flex" : "none";
+
+  const navAudit = document.getElementById("navAuditLog");
+  if (navAudit) navAudit.style.display = isPlatformAdmin() ? "flex" : "none";
 
   const badge = document.getElementById("userBadgeName");
   const roleBadge = document.getElementById("userBadgeRole");
@@ -192,6 +197,7 @@ async function onAuthenticated() {
 function onSignedOut() {
   stopTrialWatch();
   stopBellWatch();
+  resetReadCache();
   // le gate se réaffiche automatiquement (voir auth.js)
 }
 
