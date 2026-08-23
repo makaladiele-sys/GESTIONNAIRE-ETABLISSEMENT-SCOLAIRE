@@ -5,15 +5,24 @@
 // - Personnel (admin, secrétaire, comptable) : tous les messages internes
 // - Super Admin plateforme : pas concerné (pas rattaché à un établissement précis)
 //
-// L'état "lu / non lu" est gardé en local (par navigateur), pas en base —
-// c'est volontairement simple : pas de nouvelle table Supabase à gérer, au
-// prix de ne pas se synchroniser entre plusieurs appareils du même compte.
+// L'état "lu / non lu" est stocké dans Supabase (table notification_reads,
+// une ligne par utilisateur), donc synchronisé entre tous les appareils du
+// même compte — voir sql/notification_reads_migration.sql.
 // ==========================================================================
+import { getSupabase } from "../supabaseClient.js";
 import { listRows, state, isPlatformAdmin } from "../state.js";
 import { escapeHtml } from "../ui.js";
 
 const el = (id) => document.getElementById(id);
-const STORAGE_PREFIX = "gss_notif_last_read_";
+const EPOCH = "1970-01-01T00:00:00.000Z";
+
+// Mise en cache en mémoire pour la session en cours, pour éviter une requête
+// Supabase à chaque rendu. Réinitialisé à la connexion/déconnexion.
+let cachedLastRead = null;
+
+export function resetReadCache() {
+  cachedLastRead = null;
+}
 
 function audienceMatches(audience) {
   if (isPlatformAdmin()) return false; // pas de notifications d'établissement pour le SuperAdmin
@@ -35,27 +44,34 @@ function relevantMessages() {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
-function lastReadKey() {
-  return STORAGE_PREFIX + (state.profile?.id || "anon");
+async function getLastRead() {
+  if (cachedLastRead) return cachedLastRead;
+  const sb = getSupabase();
+  const userId = state.user?.id;
+  if (!sb || !userId) return EPOCH;
+  try {
+    const { data } = await sb.from("notification_reads").select("last_read_at").eq("user_id", userId).maybeSingle();
+    cachedLastRead = data?.last_read_at || EPOCH;
+  } catch (_) {
+    cachedLastRead = EPOCH;
+  }
+  return cachedLastRead;
 }
 
-function getLastRead() {
+async function setLastRead(iso) {
+  cachedLastRead = iso;
+  const sb = getSupabase();
+  const userId = state.user?.id;
+  if (!sb || !userId) return;
   try {
-    return localStorage.getItem(lastReadKey()) || "1970-01-01T00:00:00.000Z";
+    await sb.from("notification_reads").upsert({ user_id: userId, last_read_at: iso });
   } catch (_) {
-    return "1970-01-01T00:00:00.000Z";
+    // best-effort : si l'écriture échoue (hors-ligne, etc.), le badge se
+    // remettra à jour normalement à la prochaine ouverture réussie.
   }
 }
 
-function setLastRead(iso) {
-  try {
-    localStorage.setItem(lastReadKey(), iso);
-  } catch (_) {
-    // localStorage indisponible (navigation privée stricte, etc.) — pas bloquant.
-  }
-}
-
-function render() {
+async function render() {
   const wrap = el("notifWrap");
   if (isPlatformAdmin()) {
     if (wrap) wrap.style.display = "none";
@@ -64,7 +80,7 @@ function render() {
   if (wrap) wrap.style.display = "";
 
   const msgs = relevantMessages();
-  const lastRead = getLastRead();
+  const lastRead = await getLastRead();
   const unread = msgs.filter((m) => new Date(m.created_at) > new Date(lastRead));
 
   const badge = el("notifBadge");
@@ -111,17 +127,17 @@ export async function refreshBell() {
       return;
     }
   }
-  render();
+  await render();
 }
 
-function togglePanel(forceShow) {
+async function togglePanel(forceShow) {
   const panel = el("notifPanel");
   if (!panel) return;
   const show = forceShow !== undefined ? forceShow : panel.style.display === "none" || !panel.style.display;
   panel.style.display = show ? "block" : "none";
   if (show) {
-    setLastRead(new Date().toISOString());
-    render();
+    await setLastRead(new Date().toISOString());
+    await render();
   }
 }
 
@@ -139,4 +155,3 @@ export function mountBell() {
     togglePanel(false);
   });
 }
-
