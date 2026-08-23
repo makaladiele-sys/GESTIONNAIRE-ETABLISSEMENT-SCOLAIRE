@@ -344,12 +344,7 @@
             <button class="btn btn-light" id="exportPaymentsWord">⬇ Word</button>
           </div>
         </div>
-        <div class="notice">💡 Ces totaux (scolarité uniquement) sont calculés exactement comme dans <b>Recouvrement</b> — les deux pages affichent toujours les mêmes chiffres.</div>
-        <div class="grid3">
-          <div class="card"><div class="label">Attendu (scolarité, cumulé)</div><div class="value" id="payDue">0</div></div>
-          <div class="card"><div class="label">Encaissé (scolarité)</div><div class="value" id="payPaid">0</div></div>
-          <div class="card"><div class="label">En retard (scolarité)</div><div class="value" id="payUnpaid">0</div></div>
-        </div>
+        <div class="notice">💡 Le suivi des impayés de scolarité (Attendu / Encaissé / En retard) est désormais centralisé sur la page <a href="#" data-nav="collections" style="font-weight:600">Recouvrement</a>, pour éviter d'afficher deux fois les mêmes chiffres.</div>
         <div class="card">
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Élève</th><th>Parent</th><th>Motif</th><th>Montant dû</th><th>Payé</th><th>Reste</th><th>Date</th><th>Statut</th><th>Reçu</th><th>Action</th></tr></thead>
@@ -368,10 +363,11 @@
           </div>
         </div>
         <div class="notice warning" id="collectionsNotice" style="display:none"></div>
+        <p style="font-size:13px;color:var(--muted,#6b7280);margin:0 0 10px">ℹ️ Ces chiffres portent uniquement sur la <strong>scolarité mensuelle</strong> (motif « Scolarité »). Les autres frais (inscription, blouses, etc.) sont exclus et suivis séparément.</p>
         <div class="stats">
-          <div class="stat"><div><div class="label">Attendu (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
-          <div class="stat"><div><div class="label">Recouvré</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
-          <div class="stat"><div><div class="label">En retard</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
+          <div class="stat"><div><div class="label">Attendu — scolarité (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
+          <div class="stat"><div><div class="label">Recouvré — scolarité</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
+          <div class="stat"><div><div class="label">En retard — scolarité</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
           <div class="stat"><div><div class="label">Taux de recouvrement</div><div class="value" id="colRate">0%</div></div><div class="stat-icon">📊</div></div>
         </div>
         <div class="card">
