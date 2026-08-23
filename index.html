@@ -93,6 +93,7 @@
       <button data-page="users"><span class="ic">👥</span> Utilisateurs & Rôles</button>
       <button data-page="settings"><span class="ic">⚙️</span> Paramètres établissement</button>
       <button data-page="superadmin" id="navSuperAdmin" style="display:none"><span class="ic">🛡️</span> Super Admin</button>
+      <button data-page="auditlog" id="navAuditLog" style="display:none"><span class="ic">🕵️</span> Journal d'audit</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -343,7 +344,12 @@
             <button class="btn btn-light" id="exportPaymentsWord">⬇ Word</button>
           </div>
         </div>
-        <div class="notice">💡 Le suivi des impayés de scolarité (Attendu / Encaissé / En retard) est désormais centralisé sur la page <a href="#" data-nav="collections" style="font-weight:600">Recouvrement</a>, pour éviter d'afficher deux fois les mêmes chiffres.</div>
+        <div class="notice">💡 Ces totaux (scolarité uniquement) sont calculés exactement comme dans <b>Recouvrement</b> — les deux pages affichent toujours les mêmes chiffres.</div>
+        <div class="grid3">
+          <div class="card"><div class="label">Attendu (scolarité, cumulé)</div><div class="value" id="payDue">0</div></div>
+          <div class="card"><div class="label">Encaissé (scolarité)</div><div class="value" id="payPaid">0</div></div>
+          <div class="card"><div class="label">En retard (scolarité)</div><div class="value" id="payUnpaid">0</div></div>
+        </div>
         <div class="card">
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Élève</th><th>Parent</th><th>Motif</th><th>Montant dû</th><th>Payé</th><th>Reste</th><th>Date</th><th>Statut</th><th>Reçu</th><th>Action</th></tr></thead>
@@ -362,11 +368,10 @@
           </div>
         </div>
         <div class="notice warning" id="collectionsNotice" style="display:none"></div>
-        <p style="font-size:13px;color:var(--muted,#6b7280);margin:0 0 10px">ℹ️ Ces chiffres portent uniquement sur la <strong>scolarité mensuelle</strong> (motif « Scolarité »). Les autres frais (inscription, blouses, etc.) sont exclus et suivis séparément.</p>
         <div class="stats">
-          <div class="stat"><div><div class="label">Attendu — scolarité (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
-          <div class="stat"><div><div class="label">Recouvré — scolarité</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
-          <div class="stat"><div><div class="label">En retard — scolarité</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
+          <div class="stat"><div><div class="label">Attendu (cumulé)</div><div class="value" id="colExpected">0</div></div><div class="stat-icon">📐</div></div>
+          <div class="stat"><div><div class="label">Recouvré</div><div class="value" id="colCollected">0</div></div><div class="stat-icon">💰</div></div>
+          <div class="stat"><div><div class="label">En retard</div><div class="value" id="colOverdue">0</div></div><div class="stat-icon">⚠️</div></div>
           <div class="stat"><div><div class="label">Taux de recouvrement</div><div class="value" id="colRate">0%</div></div><div class="stat-icon">📊</div></div>
         </div>
         <div class="card">
@@ -425,7 +430,7 @@
           <div><h2>Communication</h2><p>Notifications internes envoyées aux parents, élèves ou enseignants.</p></div>
           <button class="btn btn-primary" id="openAddMessage">＋ Nouveau message</button>
         </div>
-        <div class="notice">📧 Le canal <b>Email</b> envoie un message réel. Les canaux Notification interne / SMS / WhatsApp sont pour l'instant seulement enregistrés en historique, en attendant leur configuration.</div>
+        <div class="notice">📱 Les canaux <b>SMS</b>, <b>Email</b> et <b>Notification interne</b> (visible via la cloche 🔔) sont réellement fonctionnels. Le canal WhatsApp est pour l'instant seulement enregistré en historique, en attendant sa configuration.</div>
         <div class="card">
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Date</th><th>Canal</th><th>Audience</th><th>Message</th><th>Statut</th></tr></thead>
@@ -483,6 +488,29 @@
           <div class="table-wrap">
             <table class="table"><thead><tr><th>Établissement</th><th>Email admin</th><th>Téléphone</th><th>Créé le</th><th>Statut</th><th>Essai</th><th>Action</th></tr></thead>
             <tbody id="superAdminBody"><tr><td colspan="7" class="empty">Chargement…</td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ AUDIT LOG -->
+      <div class="page" id="auditlog">
+        <div class="page-head">
+          <div><h2>Journal d'audit</h2><p>Chaque action du compte SuperAdmin sur les données d'un établissement, tracée automatiquement.</p></div>
+          <button class="btn btn-light" id="refreshAuditLog">🔄 Actualiser</button>
+        </div>
+        <div class="card">
+          <div class="filters">
+            <select id="auditTableFilter"><option value="">Toutes les tables</option></select>
+            <select id="auditActionFilter">
+              <option value="">Toutes les actions</option>
+              <option value="INSERT">Création</option>
+              <option value="UPDATE">Modification</option>
+              <option value="DELETE">Suppression</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="table"><thead><tr><th>Date / heure</th><th>Table</th><th>Action</th><th>Acteur</th><th>Enregistrement</th><th>Détails</th></tr></thead>
+            <tbody id="auditLogBody"><tr><td colspan="6" class="empty">Chargement…</td></tr></tbody></table>
           </div>
         </div>
       </div>
@@ -670,6 +698,11 @@
       <span class="hint">L'enseignant ne pourra saisir des notes que pour ces classes/matières précises.</span>
     </div>
   </div><button class="btn btn-primary" style="margin-top:16px">Envoyer l'invitation</button></form>
+</div></div>
+
+<div class="modal" id="auditDetailModal"><div class="modal-box">
+  <div class="modal-head"><h3>Détail de l'action</h3><button class="close" data-close-modal>×</button></div>
+  <div id="auditDetailContent"></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
