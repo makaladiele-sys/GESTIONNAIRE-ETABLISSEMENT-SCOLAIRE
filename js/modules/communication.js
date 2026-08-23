@@ -4,7 +4,7 @@
 // (Gmail SMTP côté serveur — voir sql/notification_reads_migration.sql et
 // send-email-function.ts). Les canaux SMS / WhatsApp restent à configurer.
 // ==========================================================================
-import { listRows, insertRow, state } from "../state.js";
+import { listRows, insertRow, state, isPlatformAdmin } from "../state.js";
 import { getSupabase } from "../supabaseClient.js";
 import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
 import { refreshBell } from "./notifications.js";
@@ -86,6 +86,12 @@ export function mount() {
 
   el("messageForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    if (isPlatformAdmin()) {
+      toast("Connectez-vous avec un compte établissement pour envoyer un message.");
+      return;
+    }
+
     const channel = el("fMsgChannel").value;
     const audience = el("fMsgAudience").value;
     const body = el("fMsgBody").value.trim();
