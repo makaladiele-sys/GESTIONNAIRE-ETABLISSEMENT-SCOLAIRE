@@ -61,49 +61,58 @@ function showSignupView(show) {
       : "Connexion sécurisée à votre établissement");
 }
 
-// --------------------------------------------------------------------------
-// Point d'entrée unique et protégé vers loadProfileAndSchool + onAuthenticated.
-// --------------------------------------------------------------------------
-
-// Utilisateur actuellement en cours de chargement (évite les doubles appels
-// concurrents déclenchés par onAuthStateChange + getSession() en parallèle).
-let _enteringUserId = null;
-
 async function loadContextAndEnter(session) {
   if (!session?.user) return;
-
-  // Déjà en cours de chargement pour cet utilisateur -> on ignore.
-  if (_enteringUserId === session.user.id) return;
-
-  // Déjà chargé avec succès pour cet utilisateur -> on ignore (évite un
-  // second passage complet quand TOKEN_REFRESHED se déclenche par ex.).
-  if (state.user?.id === session.user.id && state.profile) return;
-
-  _enteringUserId = session.user.id;
-
   try {
     setBusy(true);
     clearError();
     state.session = session;
     state.user = session.user;
     await loadProfileAndSchool(session.user.id);
-    unlockGate();
-    onAuthenticated();
+
+// Vérifier le statut de l'établissement
+if (state.school?.status === "suspended") {
+  const sb = getSupabase();
+
+  await sb.auth.signOut();
+
+  lockGate();
+  showSignupView(false);
+
+  showError(
+    "Votre établissement est actuellement suspendu. Veuillez contacter l'administrateur de la plateforme."
+  );
+
+  return;
+}
+
+if (state.school?.status === "pending") {
+  const sb = getSupabase();
+
+  await sb.auth.signOut();
+
+  lockGate();
+  showSignupView(false);
+
+  showError(
+    "Votre inscription est bien enregistrée et en attente de validation par l'administrateur de la plateforme. Vous recevrez un accès dès l'approbation."
+  );
+
+  return;
+}
+
+unlockGate();
+onAuthenticated();
   } catch (e) {
     const sb = getSupabase();
     try {
       await sb.auth.signOut();
     } catch (_) {}
-    state.user = null;
     lockGate();
     showSignupView(false);
     showError(e.message || "Impossible de charger votre profil.");
   } finally {
     setBusy(false);
-    // On libère le verrou seulement en cas d'échec (state.user remis à null
-    // ci-dessus) ; en cas de succès, la garde "déjà chargé" plus haut prend
-    // le relais pour empêcher tout rechargement inutile.
-    if (!state.user) _enteringUserId = null;
   }
 }
 
@@ -181,19 +190,17 @@ export function initAuth() {
     if (password.length < 8) return showError("Le mot de passe doit contenir au moins 8 caractères.");
     try {
       setBusy(true);
-      // 1) Créer l'établissement, actif immédiatement après inscription.
+      // 1) Créer l'établissement, statut "pending" (en attente de validation superadmin).
+      const newSchoolId = crypto.randomUUID();
+      const { error: schoolErr } = await sb.from("schools").insert({
+        id: newSchoolId,
+        name: schoolName,
+        email,
+        phone,
+        status: "pending",
+      });
+      if (schoolErr) throw schoolErr;
 
-const newSchoolId = crypto.randomUUID();
-
-const { error: schoolErr } = await sb.from("schools").insert({
-  id: newSchoolId,
-  name: schoolName,
-  email,
-  phone,
-  status: "active",
-});
-
-if (schoolErr) throw schoolErr;
       // 2) Créer le compte administrateur ; le trigger SQL handle_new_school_admin()
       //    lit school_id dans les métadonnées et crée automatiquement le profil.
       const { error: signUpErr } = await sb.auth.signUp({
@@ -203,10 +210,10 @@ if (schoolErr) throw schoolErr;
       });
       if (signUpErr) throw signUpErr;
 
-      el("authSignupSuccess") &&
-        ((el("authSignupSuccess").style.display = "block"),
-        (el("authSignupSuccess").innerHTML =
-          "✓ Votre demande a été envoyée. Un administrateur de la plateforme va valider votre établissement avant l'activation de votre accès."));
+el("authSignupSuccess") &&
+  ((el("authSignupSuccess").style.display = "block"),
+  (el("authSignupSuccess").innerHTML =
+    "✓ Votre inscription a bien été enregistrée. Un administrateur de la plateforme doit valider votre établissement avant que vous puissiez y accéder — vous serez notifié dès que ce sera fait."));
       ["authSignupSchoolName", "authSignupEmail", "authSignupPhone", "authSignupPassword"].forEach((id) => {
         if (el(id)) el(id).value = "";
       });
@@ -244,7 +251,6 @@ if (schoolErr) throw schoolErr;
       state.user = null;
       state.profile = null;
       state.school = null;
-      _enteringUserId = null;
       lockGate();
       onSignedOut();
       return;
@@ -256,15 +262,10 @@ if (schoolErr) throw schoolErr;
       return;
     }
     if (session?.user && ["SIGNED_IN", "INITIAL_SESSION", "TOKEN_REFRESHED"].includes(event)) {
-      await loadContextAndEnter(session);
+      if (state.user?.id !== session.user.id) await loadContextAndEnter(session);
     }
   });
 
-  // Filet de sécurité pour les environnements où onAuthStateChange ne
-  // livre pas INITIAL_SESSION assez tôt. loadContextAndEnter() étant
-  // désormais idempotente (verrou _enteringUserId), cet appel ne peut
-  // plus provoquer de double chargement avec celui déclenché par
-  // onAuthStateChange ci-dessus.
   sb.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) loadContextAndEnter(session);
     else lockGate();
