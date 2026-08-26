@@ -15,6 +15,37 @@ export function setAuthCallbacks({ authenticated, signedOut }) {
   onSignedOut = signedOut || onSignedOut;
 }
 
+// --------------------------------------------------------------------------
+// Traduction des messages d'erreur Supabase (renvoyés en anglais) vers le
+// français, pour l'affichage dans la zone authError.
+// --------------------------------------------------------------------------
+const AUTH_ERROR_TRANSLATIONS = [
+  { match: /invalid login credentials/i, fr: "E-mail ou mot de passe incorrect." },
+  { match: /email not confirmed/i, fr: "Votre adresse e-mail n'a pas encore été confirmée." },
+  { match: /user already registered/i, fr: "Un compte existe déjà avec cette adresse e-mail." },
+  { match: /already registered/i, fr: "Un compte existe déjà avec cette adresse e-mail." },
+  { match: /password should be at least (\d+) characters/i, fr: (m) => `Le mot de passe doit contenir au moins ${m[1]} caractères.` },
+  { match: /unable to validate email address/i, fr: "Adresse e-mail invalide." },
+  { match: /email address .* is invalid/i, fr: "Adresse e-mail invalide." },
+  { match: /rate limit/i, fr: "Trop de tentatives. Veuillez patienter avant de réessayer." },
+  { match: /user not found/i, fr: "Aucun compte trouvé avec cette adresse e-mail." },
+  { match: /token has expired or is invalid/i, fr: "Le lien a expiré ou a déjà été utilisé." },
+  { match: /new password should be different/i, fr: "Le nouveau mot de passe doit être différent de l'ancien." },
+  { match: /signup requires a valid password/i, fr: "Veuillez saisir un mot de passe valide." },
+  { match: /failed to fetch|networkerror/i, fr: "Connexion internet indisponible. Vérifiez votre connexion et réessayez." },
+  { match: /duplicate key value/i, fr: "Cette information est déjà utilisée par un autre compte." },
+  { match: /permission denied|row-level security|401/i, fr: "Action non autorisée. Veuillez réessayer ou contacter l'administrateur." },
+];
+
+function translateAuthError(err) {
+  const raw = err?.message || "";
+  for (const rule of AUTH_ERROR_TRANSLATIONS) {
+    const m = raw.match(rule.match);
+    if (m) return typeof rule.fr === "function" ? rule.fr(m) : rule.fr;
+  }
+  return raw || "Une erreur est survenue. Veuillez réessayer.";
+}
+
 function showError(message, ok = false) {
   const box = el("authError");
   if (!box) return;
@@ -136,7 +167,7 @@ async function loadContextAndEnter(session) {
     } catch (_) {}
     lockGate();
     showSignupView(false);
-    showError(e.message || "Impossible de charger votre profil.");
+    showError(translateAuthError(e) || "Impossible de charger votre profil.");
   } finally {
     setBusy(false);
   }
@@ -178,7 +209,7 @@ export function initAuth() {
       if (error) throw error;
       showError("Un lien de réinitialisation vient d'être envoyé à cette adresse.", true);
     } catch (e) {
-      showError(e.message || "Impossible d'envoyer le lien de réinitialisation.");
+      showError(translateAuthError(e) || "Impossible d'envoyer le lien de réinitialisation.");
     } finally {
       setBusy(false);
     }
@@ -207,7 +238,7 @@ export function initAuth() {
       );
       await loadContextAndEnter(data.session);
     } catch (e) {
-      showError(e.message || "Échec de connexion.");
+      showError(translateAuthError(e) || "Échec de connexion.");
       setBusy(false);
     }
   });
@@ -256,7 +287,7 @@ export function initAuth() {
         if (el(id)) el(id).value = "";
       });
     } catch (e) {
-      showError(e.message || "Impossible de créer votre établissement.");
+      showError(translateAuthError(e) || "Impossible de créer votre établissement.");
     } finally {
       setBusy(false);
     }
@@ -277,7 +308,7 @@ export function initAuth() {
       history.replaceState({}, document.title, location.pathname + location.search);
       await sb.auth.signOut();
     } catch (e) {
-      showError(e.message || "Impossible de modifier le mot de passe.");
+      showError(translateAuthError(e) || "Impossible de modifier le mot de passe.");
     } finally {
       setBusy(false);
     }
