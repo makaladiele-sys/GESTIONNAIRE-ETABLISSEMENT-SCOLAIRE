@@ -35,6 +35,40 @@ function setBusy(busy) {
   });
 }
 
+// --------------------------------------------------------------------------
+// Retry réseau : distingue une coupure de connexion (retryable) d'une
+// erreur métier Supabase (mot de passe incorrect, etc. -> pas de retry).
+// --------------------------------------------------------------------------
+function isNetworkError(err) {
+  return (
+    !navigator.onLine ||
+    err?.message?.includes("Failed to fetch") ||
+    err?.message?.includes("NetworkError") ||
+    err?.name === "TypeError"
+  );
+}
+
+async function withNetworkRetry(fn, { maxRetries = 3, baseDelayMs = 800, onRetry = null } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (!navigator.onLine) throw new Error("OFFLINE");
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (!isNetworkError(err)) throw err; // erreur métier -> on arrête tout de suite
+      if (attempt === maxRetries) break;
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      if (onRetry) onRetry(attempt + 1, maxRetries, delay);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  const friendlyError = new Error("Connexion internet indisponible. Vérifiez votre connexion et réessayez.");
+  friendlyError.isNetworkError = true;
+  friendlyError.originalError = lastError;
+  throw friendlyError;
+}
+
 export function lockGate() {
   document.body.classList.add("auth-locked");
   const gate = el("authGate");
@@ -70,39 +104,31 @@ async function loadContextAndEnter(session) {
     state.user = session.user;
     await loadProfileAndSchool(session.user.id);
 
-// Vérifier le statut de l'établissement
-if (state.school?.status === "suspended") {
-  const sb = getSupabase();
+    // Vérifier le statut de l'établissement
+    if (state.school?.status === "suspended") {
+      const sb = getSupabase();
+      await sb.auth.signOut();
+      lockGate();
+      showSignupView(false);
+      showError(
+        "Votre établissement est actuellement suspendu. Veuillez contacter l'administrateur de la plateforme."
+      );
+      return;
+    }
 
-  await sb.auth.signOut();
+    if (state.school?.status === "pending") {
+      const sb = getSupabase();
+      await sb.auth.signOut();
+      lockGate();
+      showSignupView(false);
+      showError(
+        "Votre inscription est bien enregistrée et en attente de validation par l'administrateur de la plateforme. Vous recevrez un accès dès l'approbation."
+      );
+      return;
+    }
 
-  lockGate();
-  showSignupView(false);
-
-  showError(
-    "Votre établissement est actuellement suspendu. Veuillez contacter l'administrateur de la plateforme."
-  );
-
-  return;
-}
-
-if (state.school?.status === "pending") {
-  const sb = getSupabase();
-
-  await sb.auth.signOut();
-
-  lockGate();
-  showSignupView(false);
-
-  showError(
-    "Votre inscription est bien enregistrée et en attente de validation par l'administrateur de la plateforme. Vous recevrez un accès dès l'approbation."
-  );
-
-  return;
-}
-
-unlockGate();
-onAuthenticated();
+    unlockGate();
+    onAuthenticated();
   } catch (e) {
     const sb = getSupabase();
     try {
@@ -165,8 +191,20 @@ export function initAuth() {
     if (!email || !password) return showError("Saisissez votre e-mail et votre mot de passe.");
     try {
       setBusy(true);
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const data = await withNetworkRetry(
+        async () => {
+          const { data, error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          return data;
+        },
+        {
+          maxRetries: 3,
+          baseDelayMs: 800,
+          onRetry: (attempt, max, delay) => {
+            showError(`Connexion instable, nouvelle tentative ${attempt}/${max}...`, true);
+          },
+        }
+      );
       await loadContextAndEnter(data.session);
     } catch (e) {
       showError(e.message || "Échec de connexion.");
@@ -210,10 +248,10 @@ export function initAuth() {
       });
       if (signUpErr) throw signUpErr;
 
-el("authSignupSuccess") &&
-  ((el("authSignupSuccess").style.display = "block"),
-  (el("authSignupSuccess").innerHTML =
-    "✓ Votre inscription a bien été enregistrée. Un administrateur de la plateforme doit valider votre établissement avant que vous puissiez y accéder — vous serez notifié dès que ce sera fait."));
+      el("authSignupSuccess") &&
+        ((el("authSignupSuccess").style.display = "block"),
+        (el("authSignupSuccess").innerHTML =
+          "✓ Votre inscription a bien été enregistrée. Un administrateur de la plateforme doit valider votre établissement avant que vous puissiez y accéder — vous serez notifié dès que ce sera fait."));
       ["authSignupSchoolName", "authSignupEmail", "authSignupPhone", "authSignupPassword"].forEach((id) => {
         if (el(id)) el(id).value = "";
       });
