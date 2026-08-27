@@ -52,6 +52,9 @@ function showError(message, ok = false) {
   box.textContent = message;
   box.classList.toggle("ok", ok);
   box.style.display = "block";
+  // S'assurer que la notification est visible, même si elle est cachée par
+  // la barre de navigation/tâches du navigateur (mobile notamment)
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 function clearError() {
   const box = el("authError");
@@ -278,6 +281,28 @@ export function initAuth() {
         options: { data: { full_name: schoolName + " — Administrateur", school_id: newSchoolId } },
       });
       if (signUpErr) throw signUpErr;
+
+      // 3) Notifier le SuperAdmin par e-mail qu'un nouvel établissement
+      //    attend une validation. Non bloquant : si l'envoi échoue,
+      //    l'inscription reste valide (l'établissement est bien créé en
+      //    "pending" et visible dans le panneau SuperAdmin).
+      try {
+        await sb.functions.invoke("send-email", {
+          body: {
+            to: "makaladiele@gmail.com",
+            subject: "Nouvelle inscription en attente de validation",
+            body:
+              `Un nouvel établissement vient de s'inscrire et attend votre validation.\n\n` +
+              `Établissement : ${schoolName}\n` +
+              `E-mail : ${email}\n` +
+              `Téléphone : ${phone || "non renseigné"}\n\n` +
+              `Connectez-vous au panneau SuperAdmin pour valider ou refuser cette inscription.`,
+            schoolName: "Gestion Scolaire Suite",
+          },
+        });
+      } catch (notifyErr) {
+        console.error("[Auth] Échec de l'envoi de la notification SuperAdmin :", notifyErr);
+      }
 
       el("authSignupSuccess") &&
         ((el("authSignupSuccess").style.display = "block"),
