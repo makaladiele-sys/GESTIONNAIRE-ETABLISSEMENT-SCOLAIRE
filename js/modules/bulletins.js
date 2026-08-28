@@ -1,8 +1,13 @@
 // ==========================================================================
 // Bulletins & documents scolaires (générés côté client à partir des notes)
+//
+// Périodes : la page mélange toutes les classes (donc tous les cycles),
+// on propose l'union des périodes possibles — trimestres pour
+// Préscolaire/Primaire, semestres pour Moyen/Secondaire (voir ../periods.js).
 // ==========================================================================
 import { listRows, state } from "../state.js";
 import { escapeHtml } from "../ui.js";
+import { getAllPeriods } from "../periods.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -11,7 +16,18 @@ export async function refresh() {
   if (!state.cache.students) await listRows("students");
   await listRows("teacher_assignments");
   await listRows("grade_submissions", { orderBy: "submitted_at", ascending: false });
+  fillPeriodFilter();
   renderTable();
+}
+
+function fillPeriodFilter() {
+  const select = el("bulletinPeriod");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = getAllPeriods()
+    .map((p) => `<option>${escapeHtml(p)}</option>`)
+    .join("");
+  if ([...select.options].some((o) => o.value === current)) select.value = current;
 }
 
 function subjectsForClass(className) {
@@ -45,7 +61,7 @@ function computeAverages(period) {
 
 function renderTable() {
   const q = (el("bulletinSearch")?.value || "").toLowerCase();
-  const period = el("bulletinPeriod")?.value || "Trimestre 1";
+  const period = el("bulletinPeriod")?.value || getAllPeriods()[0];
   const rows = computeAverages(period).filter((x) => (x.name + " " + (x.student?.matricule || "") + " " + (x.student?.class_name || "")).toLowerCase().includes(q));
 
   el("bulletinsBody").innerHTML =
