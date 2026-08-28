@@ -9,12 +9,15 @@
 // de départ selon le type d'évaluation. Les coefficients réels varient
 // selon la matière (surtout au primaire), donc dès que l'enseignant modifie
 // le champ à la main, on ne l'écrase plus jamais automatiquement.
+//
+// Périodes : dépendent du cycle de la classe (voir ../periods.js) —
+// Préscolaire/Primaire = trimestres, Moyen/Secondaire = semestres.
 // ==========================================================================
 import { listRows, insertRow, deleteRow, state, isPlatformAdmin } from "../state.js";
 import { toast, openModal, closeModal, escapeHtml } from "../ui.js";
+import { getPeriodsForClass, getAllPeriods } from "../periods.js";
 
 const el = (id) => document.getElementById(id);
-const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
 const DEFAULT_COEF = { "Devoir 1": 1, "Devoir 2": 1, "Devoir 3": 1, Composition: 2 };
 
 // Suivi : l'enseignant a-t-il modifié le coefficient lui-même dans cette
@@ -47,8 +50,22 @@ export async function refresh() {
   await listRows("teacher_assignments");
   await listRows("grade_submissions", { orderBy: "submitted_at", ascending: false });
   const grades = await listRows("grades", { orderBy: "created_at", ascending: false });
+  fillPeriodFilter();
   renderSubmissions();
   renderTable(grades);
+}
+
+// Filtre de la page (toutes classes confondues, donc tous cycles
+// confondus) : on propose l'union de toutes les périodes possibles.
+function fillPeriodFilter() {
+  const select = el("gradePeriod");
+  if (!select) return;
+  const current = select.value;
+  const options = getAllPeriods()
+    .map((p) => `<option>${escapeHtml(p)}</option>`)
+    .join("");
+  select.innerHTML = `<option>Toutes périodes</option>${options}`;
+  if ([...select.options].some((o) => o.value === current)) select.value = current;
 }
 
 // ---- Tableau des notes -------------------------------------------------
@@ -89,7 +106,8 @@ function renderSubmissions() {
   const seen = new Set();
   const combos = [];
   assignments.forEach((a) => {
-    PERIODS.forEach((p) => {
+    // Périodes propres au cycle de CETTE classe (trimestres ou semestres).
+    getPeriodsForClass(a.class_name).forEach((p) => {
       const key = a.class_name + "|" + a.subject + "|" + p;
       if (seen.has(key)) return;
       seen.add(key);
@@ -134,7 +152,7 @@ function renderSubmissions() {
       .join("") || `<tr><td colspan="5" class="empty">Aucune affectation classe/matière pour le moment.</td></tr>`;
 }
 
-// ---- Formulaire de saisie (cascade classe → matière → élève) -----------
+// ---- Formulaire de saisie (cascade classe → matière → élève → période) -
 function classOptionsForRole() {
   const names = isAdmin() || isPlatformAdmin() ? (state.cache.classes || []).map((c) => c.name) : [...new Set(myAssignments().map((a) => a.class_name))];
   return [...new Set(names)];
@@ -154,6 +172,7 @@ function refreshSubjectOptions() {
   const subjects = subjectsForClass(className);
   el("fGradeSubject").innerHTML = subjects.map((s) => `<option>${escapeHtml(s)}</option>`).join("") || `<option value="">—</option>`;
   refreshStudentOptions();
+  refreshPeriodOptions();
   updateLockNotice();
 }
 
@@ -162,6 +181,14 @@ function refreshStudentOptions() {
   const students = studentsForClass(className);
   el("fGradeStudent").innerHTML =
     students.map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join("") || `<option value="">Aucun élève dans cette classe</option>`;
+}
+
+// Remplit #fGradePeriod selon le cycle de la classe sélectionnée
+// (trimestres pour Préscolaire/Primaire, semestres pour Moyen/Secondaire).
+function refreshPeriodOptions() {
+  const className = el("fGradeClass").value;
+  const periods = getPeriodsForClass(className);
+  el("fGradePeriod").innerHTML = periods.map((p) => `<option>${escapeHtml(p)}</option>`).join("");
 }
 
 function updateLockNotice() {
@@ -289,8 +316,9 @@ export function mount() {
 
   el("downloadGradeTemplate")?.addEventListener("click", () => {
     const rows = [
-      ["Élève", "Classe", "Matière", "Coefficient", "Note", "Type", "Trimestre"],
-      ["Amadou Ndiaye", "6ème A", "Mathématiques", 1, 16, "Devoir 1", "Trimestre 1"],
+      ["Élève", "Classe", "Matière", "Coefficient", "Note", "Type", "Période"],
+      ["Amadou Ndiaye", "6ème A", "Mathématiques", 1, 16, "Devoir 1", "Semestre 1"],
+      ["Fatou Diop", "CE2", "Français", 1, 15, "Devoir 1", "Trimestre 1"],
     ];
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -320,15 +348,19 @@ function importExcel(file) {
     for (const r of rows) {
       const note = Number(String(r["Note"] ?? "").replace(",", "."));
       if (r["Élève"] && r["Matière"] && !isNaN(note) && note >= 0 && note <= 20) {
+        const className = String(r["Classe"] || "");
+        // Période par défaut si la colonne est vide : on prend la première
+        // période du cycle de la classe (au lieu de "Trimestre 1" fixe).
+        const defaultPeriod = getPeriodsForClass(className)[0] || "Trimestre 1";
         try {
           await insertRow("grades", {
             student_name: String(r["Élève"]),
-            class_name: String(r["Classe"] || ""),
+            class_name: className,
             subject: String(r["Matière"]),
             assessment_type: String(r["Type"] || "Devoir 1"),
             note,
             coefficient: Number(r["Coefficient"]) || 1,
-            period: String(r["Trimestre"] || "Trimestre 1"),
+            period: String(r["Période"] || r["Trimestre"] || defaultPeriod),
           });
           count++;
         } catch (_) {
