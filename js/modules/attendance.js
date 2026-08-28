@@ -13,13 +13,7 @@
 import { getSupabase } from "../supabaseClient.js";
 import { toast, escapeHtml } from "../ui.js";
 
-// ⚠️ À VÉRIFIER : adaptez cet import au nom réel exporté par state.js pour
-// obtenir le school_id de l'établissement actuellement connecté (nécessaire
-// pour l'INSERT/UPSERT dans attendance_records, à cause du with_check RLS
-// qui exige school_id = current_school_id()). Si state.js expose autre
-// chose (ex. state.schoolId, getActiveSchool().id, etc.), remplacez la
-// ligne d'import et l'appel dans saveRollCall().
-import { getCurrentSchoolId } from "../state.js";
+import { schoolId, upsertRows } from "../state.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -356,14 +350,9 @@ async function saveRollCall() {
   }
 
   try {
-    const sb = getSupabase();
-    if (!sb) throw new Error("Client Supabase indisponible.");
-
-    const schoolId = getCurrentSchoolId();
-    if (!schoolId) throw new Error("Établissement introuvable.");
+    if (!schoolId()) throw new Error("Établissement introuvable.");
 
     const records = Array.from(selects).map((sel) => ({
-      school_id: schoolId,
       student_name: sel.dataset.student,
       class_name: className,
       date,
@@ -372,15 +361,7 @@ async function saveRollCall() {
 
     console.log("[Attendance] Enregistrement de l'appel :", records);
 
-    const { error } = await sb
-      .from("attendance_records")
-      .upsert(records, { onConflict: "school_id,student_name,date" });
-
-    if (error) {
-      console.error("[Attendance] Erreur UPSERT :", error);
-      toast("Erreur : " + error.message);
-      return;
-    }
+    await upsertRows("attendance_records", records, "school_id,student_name,date");
 
     toast("✅ Appel enregistré.");
     closeModal();
