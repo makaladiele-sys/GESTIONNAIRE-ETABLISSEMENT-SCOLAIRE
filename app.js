@@ -1,3 +1,4 @@
+
 // ==========================================================================
 // Point d'entrée de l'application.
 // ==========================================================================
@@ -187,13 +188,17 @@ function stopBellWatch() {
 async function onAuthenticated() {
   applyRoleUI();
   mountAllModules();
+
+  // Initialise le Cahier des charges
+  initCahierDesCharges();
+
   const startPage = isPlatformAdmin() ? "superadmin" : "dashboard";
   showPage(startPage);
+
   startTrialWatch();
   await refreshBell();
   startBellWatch();
 }
-
 function onSignedOut() {
   stopTrialWatch();
   stopBellWatch();
@@ -220,7 +225,80 @@ function showConfigScreen() {
       </div>
     </div>`;
 }
+// --------------------------------------------------------------------------
+// CAHIER DES CHARGES
+// --------------------------------------------------------------------------
 
+const CAHIER_PDF_URL =
+  "https://twonzfpvzkjvrtspigra.supabase.co/storage/v1/object/public/cahier-des-charges/Cahier%20des%20charges%20Gestionnaire%20Etablissements.pdf";
+
+function initCahierDesCharges() {
+  const viewer = document.getElementById("cahierPdfViewer");
+  const emptyViewer = document.getElementById("cahierEmptyViewer");
+  const downloadBtn = document.getElementById("cahierDownloadBtn");
+  const signBtn = document.getElementById("cahierSignBtn");
+  const signatureCard = document.getElementById("cahierSignatureCard");
+
+  if (!viewer) return;
+
+  // Affichage du PDF
+  viewer.src = CAHIER_PDF_URL;
+  viewer.style.display = "block";
+
+  if (emptyViewer) {
+    emptyViewer.style.display = "none";
+  }
+
+  // Téléchargement / ouverture du document
+  if (downloadBtn) {
+    downloadBtn.onclick = () => {
+      window.open(CAHIER_PDF_URL, "_blank", "noopener,noreferrer");
+    };
+  }
+
+  // Affichage de la zone de signature
+  if (signBtn) {
+    signBtn.onclick = () => {
+      if (signatureCard) {
+        signatureCard.style.display = "block";
+        signatureCard.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
+    };
+  }
+
+  // Informations du document
+  const title = document.getElementById("cahierTitle");
+  const description = document.getElementById("cahierDescription");
+  const status = document.getElementById("cahierStatus");
+
+  if (title) {
+    title.textContent = "Cahier des charges — Gestionnaire Établissements";
+  }
+
+  if (description) {
+    description.textContent =
+      "Document de référence de la plateforme Chift Digital Academy.";
+  }
+
+  if (status) {
+    status.innerHTML =
+      '<span style="color:#16803a;font-weight:700;">● Document disponible</span>';
+  }
+
+  const version = document.getElementById("cahierVersion");
+  const date = document.getElementById("cahierDate");
+
+  if (version) {
+    version.textContent = "Version 1.0";
+  }
+
+  if (date) {
+    date.textContent = new Date().toLocaleDateString("fr-FR");
+  }
+}
 document.addEventListener("DOMContentLoaded", () => {
   if (!isConfigured()) {
     showConfigScreen();
