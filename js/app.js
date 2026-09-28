@@ -12,6 +12,7 @@ import {
   closeSidebar,
   toast
 } from "./ui.js";
+
 import {
   mountBell,
   refreshBell,
@@ -109,13 +110,15 @@ function applyRoleUI() {
   const navSuper = document.getElementById("navSuperAdmin");
 
   if (navSuper) {
-    navSuper.style.display = isPlatformAdmin() ? "flex" : "none";
+    navSuper.style.display =
+      isPlatformAdmin() ? "flex" : "none";
   }
 
   const navAudit = document.getElementById("navAuditLog");
 
   if (navAudit) {
-    navAudit.style.display = isPlatformAdmin() ? "flex" : "none";
+    navAudit.style.display =
+      isPlatformAdmin() ? "flex" : "none";
   }
 
   const badge = document.getElementById("userBadgeName");
@@ -129,21 +132,27 @@ function applyRoleUI() {
   }
 
   if (roleBadge) {
-    roleBadge.textContent = isPlatformAdmin()
-      ? "Super Admin plateforme"
-      : state.school?.name || "Établissement";
+    roleBadge.textContent =
+      isPlatformAdmin()
+        ? "Super Admin plateforme"
+        : state.school?.name || "Établissement";
   }
 
-  const tenantCard = document.getElementById("tenantCard");
+  const tenantCard =
+    document.getElementById("tenantCard");
 
   if (tenantCard) {
     if (isPlatformAdmin()) {
+
       tenantCard.innerHTML = `
         <b>Console plateforme</b>
         <small>Vue globale multi-établissements</small>
       `;
+
     } else {
-      const status = state.school?.status || "pending";
+
+      const status =
+        state.school?.status || "pending";
 
       tenantCard.innerHTML = `
         <b>${escapeHtmlLocal(
@@ -192,63 +201,110 @@ function escapeHtmlLocal(s) {
 
 
 // ==========================================================================
-// NAVIGATION / INTERFACE PRINCIPALE
+// NAVIGATION / INTERFACE
 // ==========================================================================
 
 function bindChrome() {
+
   document
     .querySelectorAll(".nav button[data-page]")
     .forEach((btn) => {
+
       btn.addEventListener("click", () => {
         showPage(btn.dataset.page);
       });
+
     });
+
 
   document
     .getElementById("menuBtn")
-    ?.addEventListener("click", toggleSidebar);
+    ?.addEventListener(
+      "click",
+      toggleSidebar
+    );
+
 
   document
     .getElementById("sidebarBackdrop")
-    ?.addEventListener("click", closeSidebar);
+    ?.addEventListener(
+      "click",
+      closeSidebar
+    );
+
 
   document
     .getElementById("logoutBtn")
-    ?.addEventListener("click", () => logout());
+    ?.addEventListener(
+      "click",
+      () => logout()
+    );
+
 
   document
     .querySelectorAll("[data-close-modal]")
     .forEach((btn) => {
+
       btn.addEventListener("click", () => {
-        btn.closest(".modal")?.classList.remove("open");
+
+        btn
+          .closest(".modal")
+          ?.classList.remove("open");
+
       });
+
     });
+
 
   document
     .getElementById("globalSearch")
-    ?.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
+    ?.addEventListener(
+      "keydown",
+      (e) => {
 
-      const q = e.target.value.trim();
+        if (e.key !== "Enter") return;
 
-      if (!q) return;
+        const q =
+          e.target.value.trim();
 
-      showPage("students");
+        if (!q) return;
 
-      const box = document.getElementById("studentSearch");
+        showPage("students");
 
-      if (box) {
-        box.value = q;
-        box.dispatchEvent(new Event("input"));
+        const box =
+          document.getElementById(
+            "studentSearch"
+          );
+
+        if (box) {
+
+          box.value = q;
+
+          box.dispatchEvent(
+            new Event("input")
+          );
+
+        }
+
       }
-    });
+    );
+
 
   document
     .getElementById("dashGoStudents")
-    ?.addEventListener("click", () => {
-      showPage("students");
-      document.getElementById("openAddStudent")?.click();
-    });
+    ?.addEventListener(
+      "click",
+      () => {
+
+        showPage("students");
+
+        document
+          .getElementById("openAddStudent")
+          ?.click();
+
+      }
+    );
+
 
   setNavigateHandler(refreshPage);
 
@@ -259,86 +315,114 @@ function bindChrome() {
 // ==========================================================================
 // CAHIER DES CHARGES
 // ==========================================================================
-//
-// PDF enregistré dans Supabase Storage :
-//
-// Bucket : cahier-des-charges
-//
-// Fichier :
-// Cahier des charges Gestionnaire Etablissements.pdf
-//
-// URL publique :
-// https://twonzfpvzkjvrtspigra.supabase.co/storage/v1/object/public/
-// cahier-des-charges/Cahier%20des%20charges%20Gestionnaire%20Etablissements.pdf
-//
-// ==========================================================================
 
 const CAHIER_PDF_URL =
   "https://twonzfpvzkjvrtspigra.supabase.co/storage/v1/object/public/cahier-des-charges/Cahier%20des%20charges%20Gestionnaire%20Etablissements.pdf";
 
 
 function initCahierDesCharges() {
-  const viewer = document.getElementById("cahierPdfViewer");
-  const emptyViewer = document.getElementById("cahierEmptyViewer");
+
+  const viewer =
+    document.getElementById(
+      "cahierPdfViewer"
+    );
+
+  const emptyViewer =
+    document.getElementById(
+      "cahierEmptyViewer"
+    );
 
   const downloadBtn =
-    document.getElementById("cahierDownloadBtn");
+    document.getElementById(
+      "cahierDownloadBtn"
+    );
 
   const signBtn =
-    document.getElementById("cahierSignBtn");
+    document.getElementById(
+      "cahierSignBtn"
+    );
 
   const signatureCard =
-    document.getElementById("cahierSignatureCard");
+    document.getElementById(
+      "cahierSignatureCard"
+    );
 
-  // La page Cahier n'existe pas dans certains contextes.
-  // On quitte simplement sans générer d'erreur.
-  if (!viewer) {
-    return;
+  const canvas =
+    document.getElementById(
+      "cahierSignatureCanvas"
+    );
+
+  const clearBtn =
+    document.getElementById(
+      "cahierClearSignature"
+    );
+
+  const submitBtn =
+    document.getElementById(
+      "cahierSubmitSignature"
+    );
+
+  const signerName =
+    document.getElementById(
+      "cahierSignerName"
+    );
+
+  const signerFunction =
+    document.getElementById(
+      "cahierSignerFunction"
+    );
+
+  const consent =
+    document.getElementById(
+      "cahierConsent"
+    );
+
+
+  // ------------------------------------------------------------------------
+  // PDF
+  // ------------------------------------------------------------------------
+
+  if (viewer) {
+
+    viewer.src =
+      CAHIER_PDF_URL;
+
+    viewer.style.display =
+      "block";
+
+    if (emptyViewer) {
+      emptyViewer.style.display =
+        "none";
+    }
+
+    viewer.addEventListener(
+      "load",
+      () => {
+
+        console.log(
+          "Cahier des charges chargé avec succès."
+        );
+
+      },
+      { once: true }
+    );
   }
 
 
   // ------------------------------------------------------------------------
-  // AFFICHAGE DU PDF
-  // ------------------------------------------------------------------------
-
-  viewer.src = CAHIER_PDF_URL;
-
-  viewer.style.display = "block";
-
-  if (emptyViewer) {
-    emptyViewer.style.display = "none";
-  }
-
-
-  // ------------------------------------------------------------------------
-  // BOUTON TÉLÉCHARGER
+  // TÉLÉCHARGEMENT
   // ------------------------------------------------------------------------
 
   if (downloadBtn) {
+
     downloadBtn.onclick = () => {
+
       window.open(
         CAHIER_PDF_URL,
         "_blank",
         "noopener,noreferrer"
       );
-    };
-  }
 
-
-  // ------------------------------------------------------------------------
-  // BOUTON SIGNER
-  // ------------------------------------------------------------------------
-
-  if (signBtn) {
-    signBtn.onclick = () => {
-      if (!signatureCard) return;
-
-      signatureCard.style.display = "block";
-
-      signatureCard.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
     };
   }
 
@@ -348,34 +432,49 @@ function initCahierDesCharges() {
   // ------------------------------------------------------------------------
 
   const title =
-    document.getElementById("cahierTitle");
+    document.getElementById(
+      "cahierTitle"
+    );
 
   const description =
-    document.getElementById("cahierDescription");
+    document.getElementById(
+      "cahierDescription"
+    );
 
   const status =
-    document.getElementById("cahierStatus");
+    document.getElementById(
+      "cahierStatus"
+    );
 
   const version =
-    document.getElementById("cahierVersion");
+    document.getElementById(
+      "cahierVersion"
+    );
 
   const date =
-    document.getElementById("cahierDate");
+    document.getElementById(
+      "cahierDate"
+    );
 
 
   if (title) {
+
     title.textContent =
       "Cahier des charges — Gestionnaire Établissements";
+
   }
 
 
   if (description) {
+
     description.textContent =
       "Document de référence de la plateforme Chift Digital Academy.";
+
   }
 
 
   if (status) {
+
     status.innerHTML = `
       <span style="
         color:#16803a;
@@ -384,85 +483,546 @@ function initCahierDesCharges() {
         ● Document disponible
       </span>
     `;
+
   }
 
 
   if (version) {
-    version.textContent = "Version 1.0";
+    version.textContent =
+      "Version 1.0";
   }
 
 
   if (date) {
+
     date.textContent =
-      new Date().toLocaleDateString("fr-FR");
+      new Date()
+        .toLocaleDateString("fr-FR");
+
   }
 
 
   // ------------------------------------------------------------------------
-  // VÉRIFICATION VISUELLE DU PDF
+  // SIGNER LE DOCUMENT
   // ------------------------------------------------------------------------
 
-  viewer.addEventListener(
-    "load",
-    () => {
-      console.log(
-        "Cahier des charges chargé avec succès."
-      );
-    },
-    { once: true }
-  );
+  if (
+    signBtn &&
+    signatureCard
+  ) {
 
-  viewer.addEventListener(
-    "error",
-    () => {
-      console.error(
-        "Impossible de charger le Cahier des charges."
-      );
+    signBtn.onclick = () => {
 
-      if (emptyViewer) {
-        emptyViewer.style.display = "block";
-        emptyViewer.innerHTML = `
-          <div style="padding:30px;text-align:center">
-            <div style="font-size:38px;margin-bottom:10px">
-              ⚠️
-            </div>
+      signatureCard.style.display =
+        "block";
 
-            <strong>
-              Impossible de charger le document.
-            </strong>
 
-            <p style="margin-top:8px;color:#657089">
-              Vérifiez que le fichier est bien présent
-              dans le bucket public
-              <b>cahier-des-charges</b>.
-            </p>
+      signatureCard.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
 
-            <a
-              href="${CAHIER_PDF_URL}"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="btn btn-primary"
-              style="
-                display:inline-block;
-                margin-top:12px;
-                text-decoration:none;
-              "
-            >
-              Ouvrir le PDF
-            </a>
-          </div>
-        `;
 
-        viewer.style.display = "none";
+      // Préremplir le nom
+      if (
+        signerName &&
+        !signerName.value &&
+        state.profile
+      ) {
+
+        signerName.value =
+          state.profile.full_name ||
+          state.profile.email ||
+          "";
+
       }
-    },
-    { once: true }
-  );
+
+
+      setTimeout(() => {
+
+        prepareSignatureCanvas();
+
+      }, 150);
+
+    };
+
+  }
+
+
+  // ------------------------------------------------------------------------
+  // CANVAS DE SIGNATURE
+  // ------------------------------------------------------------------------
+
+  function prepareSignatureCanvas() {
+
+    if (!canvas) {
+
+      console.warn(
+        "Canvas de signature introuvable."
+      );
+
+      return;
+    }
+
+
+    const ctx =
+      canvas.getContext("2d");
+
+
+    if (!ctx) {
+
+      console.error(
+        "Impossible d'initialiser le canvas."
+      );
+
+      return;
+    }
+
+
+    // Ne pas installer deux fois les événements
+    if (
+      canvas.dataset.initialized ===
+      "true"
+    ) {
+      return;
+    }
+
+
+    canvas.dataset.initialized =
+      "true";
+
+
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111827";
+
+
+    let drawing = false;
+    let hasSignature = false;
+
+
+    // ----------------------------------------------------------------------
+    // POSITION SOURIS / DOIGT
+    // ----------------------------------------------------------------------
+
+    function getPosition(event) {
+
+      const rect =
+        canvas.getBoundingClientRect();
+
+
+      const scaleX =
+        canvas.width /
+        rect.width;
+
+      const scaleY =
+        canvas.height /
+        rect.height;
+
+
+      let clientX;
+      let clientY;
+
+
+      if (
+        event.touches &&
+        event.touches.length
+      ) {
+
+        clientX =
+          event.touches[0].clientX;
+
+        clientY =
+          event.touches[0].clientY;
+
+      } else {
+
+        clientX =
+          event.clientX;
+
+        clientY =
+          event.clientY;
+
+      }
+
+
+      return {
+
+        x:
+          (clientX - rect.left) *
+          scaleX,
+
+        y:
+          (clientY - rect.top) *
+          scaleY
+
+      };
+
+    }
+
+
+    // ----------------------------------------------------------------------
+    // DÉBUT DU DESSIN
+    // ----------------------------------------------------------------------
+
+    function startDrawing(event) {
+
+      event.preventDefault();
+
+      drawing = true;
+
+      hasSignature = true;
+
+
+      const pos =
+        getPosition(event);
+
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        pos.x,
+        pos.y
+      );
+
+    }
+
+
+    // ----------------------------------------------------------------------
+    // DESSIN
+    // ----------------------------------------------------------------------
+
+    function draw(event) {
+
+      if (!drawing) return;
+
+      event.preventDefault();
+
+
+      const pos =
+        getPosition(event);
+
+
+      ctx.lineTo(
+        pos.x,
+        pos.y
+      );
+
+      ctx.stroke();
+
+    }
+
+
+    // ----------------------------------------------------------------------
+    // FIN DU DESSIN
+    // ----------------------------------------------------------------------
+
+    function stopDrawing(event) {
+
+      if (!drawing) return;
+
+      if (event) {
+        event.preventDefault();
+      }
+
+      drawing = false;
+
+      ctx.closePath();
+
+    }
+
+
+    // ----------------------------------------------------------------------
+    // SOURIS
+    // ----------------------------------------------------------------------
+
+    canvas.addEventListener(
+      "mousedown",
+      startDrawing
+    );
+
+    canvas.addEventListener(
+      "mousemove",
+      draw
+    );
+
+    canvas.addEventListener(
+      "mouseup",
+      stopDrawing
+    );
+
+    canvas.addEventListener(
+      "mouseleave",
+      stopDrawing
+    );
+
+
+    // ----------------------------------------------------------------------
+    // ÉCRAN TACTILE
+    // ----------------------------------------------------------------------
+
+    canvas.addEventListener(
+      "touchstart",
+      startDrawing,
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      "touchmove",
+      draw,
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      "touchend",
+      stopDrawing,
+      { passive: false }
+    );
+
+
+    // ----------------------------------------------------------------------
+    // EFFACER LA SIGNATURE
+    // ----------------------------------------------------------------------
+
+    if (clearBtn) {
+
+      clearBtn.onclick = () => {
+
+        ctx.clearRect(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        hasSignature = false;
+
+
+        console.log(
+          "Signature effacée."
+        );
+
+      };
+
+    }
+
+
+    // ----------------------------------------------------------------------
+    // SIGNER ET ENVOYER
+    // ----------------------------------------------------------------------
+
+    if (submitBtn) {
+
+      submitBtn.onclick =
+        async () => {
+
+          const name =
+            signerName?.value.trim() ||
+            "";
+
+          const fonction =
+            signerFunction?.value.trim() ||
+            "";
+
+
+          // Nom obligatoire
+          if (!name) {
+
+            toast(
+              "Veuillez renseigner votre nom."
+            );
+
+            signerName?.focus();
+
+            return;
+          }
+
+
+          // Fonction obligatoire
+          if (!fonction) {
+
+            toast(
+              "Veuillez renseigner votre fonction."
+            );
+
+            signerFunction?.focus();
+
+            return;
+          }
+
+
+          // Signature obligatoire
+          if (!hasSignature) {
+
+            toast(
+              "Veuillez signer dans la zone prévue."
+            );
+
+            return;
+          }
+
+
+          // Consentement obligatoire
+          if (
+            consent &&
+            !consent.checked
+          ) {
+
+            toast(
+              "Veuillez confirmer votre consentement."
+            );
+
+            return;
+          }
+
+
+          // Conversion en PNG
+          const signatureData =
+            canvas.toDataURL(
+              "image/png"
+            );
+
+
+          console.log(
+            "Signature prête.",
+            {
+              name,
+              fonction,
+              signatureDataLength:
+                signatureData.length
+            }
+          );
+
+
+          submitBtn.disabled =
+            true;
+
+
+          const oldText =
+            submitBtn.innerHTML;
+
+
+          submitBtn.innerHTML =
+            "⏳ Signature en cours...";
+
+
+          try {
+
+            /*
+             * Cette première version valide
+             * la signature dans l'application.
+             *
+             * La sauvegarde définitive dans
+             * Supabase sera branchée après
+             * vérification de la table dédiée.
+             */
+
+            await new Promise(
+              (resolve) =>
+                setTimeout(
+                  resolve,
+                  500
+                )
+            );
+
+
+            const submittedCard =
+              document.getElementById(
+                "cahierSubmittedCard"
+              );
+
+
+            const submittedMessage =
+              document.getElementById(
+                "cahierSubmittedMessage"
+              );
+
+
+            if (submittedCard) {
+
+              submittedCard.style.display =
+                "block";
+
+
+              submittedCard.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+              });
+
+            }
+
+
+            if (submittedMessage) {
+
+              submittedMessage.textContent =
+                `Le document a été signé par ${name} (${fonction}).`;
+
+            }
+
+
+            toast(
+              "✅ Signature enregistrée."
+            );
+
+
+            console.log(
+              "Signature validée.",
+              {
+                name,
+                fonction,
+                signatureData
+              }
+            );
+
+
+          } catch (error) {
+
+            console.error(
+              "Erreur signature :",
+              error
+            );
+
+
+            toast(
+              "Erreur lors de la signature."
+            );
+
+
+          } finally {
+
+            submitBtn.disabled =
+              false;
+
+
+            submitBtn.innerHTML =
+              oldText;
+
+          }
+
+        };
+
+    }
+
+  }
+
+
+  // ------------------------------------------------------------------------
+  // CONFIGURATION DU CANVAS
+  // ------------------------------------------------------------------------
+
+  if (canvas) {
+
+    canvas.style.touchAction =
+      "none";
+
+  }
+
 }
 
 
 // ==========================================================================
-// CONTRÔLE DE LA PÉRIODE D'ESSAI
+// CONTRÔLE PÉRIODE D'ESSAI
 // ==========================================================================
 
 const TRIAL_CHECK_INTERVAL_MS =
@@ -472,40 +1032,65 @@ let _trialIntervalId = null;
 
 
 function startTrialWatch() {
+
   stopTrialWatch();
 
   if (isPlatformAdmin()) {
     return;
   }
 
-  _trialIntervalId = setInterval(async () => {
-    const result = await checkTrialStatus();
 
-    if (!result.ok) {
-      stopTrialWatch();
+  _trialIntervalId =
+    setInterval(
+      async () => {
 
-      toast(
-        result.reason === "trial_expired"
-          ? "⛔ Votre période d'essai de 15 jours est terminée."
-          : "⛔ Votre établissement a été suspendu."
-      );
+        const result =
+          await checkTrialStatus();
 
-      await logout();
-    }
-  }, TRIAL_CHECK_INTERVAL_MS);
+
+        if (!result.ok) {
+
+          stopTrialWatch();
+
+
+          toast(
+            result.reason ===
+            "trial_expired"
+
+              ? "⛔ Votre période d'essai de 15 jours est terminée."
+
+              : "⛔ Votre établissement a été suspendu."
+          );
+
+
+          await logout();
+
+        }
+
+      },
+      TRIAL_CHECK_INTERVAL_MS
+    );
 }
 
 
 function stopTrialWatch() {
+
   if (_trialIntervalId) {
-    clearInterval(_trialIntervalId);
-    _trialIntervalId = null;
+
+    clearInterval(
+      _trialIntervalId
+    );
+
+    _trialIntervalId =
+      null;
+
   }
+
 }
 
 
 // ==========================================================================
-// RAFRAÎCHISSEMENT DES NOTIFICATIONS
+// RAFRAÎCHISSEMENT NOTIFICATIONS
 // ==========================================================================
 
 const BELL_CHECK_INTERVAL_MS =
@@ -515,27 +1100,42 @@ let _bellIntervalId = null;
 
 
 function startBellWatch() {
+
   stopBellWatch();
 
   if (isPlatformAdmin()) {
     return;
   }
 
-  _bellIntervalId = setInterval(() => {
 
-    state.cache.messages = null;
+  _bellIntervalId =
+    setInterval(
+      () => {
 
-    refreshBell();
+        state.cache.messages =
+          null;
 
-  }, BELL_CHECK_INTERVAL_MS);
+        refreshBell();
+
+      },
+      BELL_CHECK_INTERVAL_MS
+    );
 }
 
 
 function stopBellWatch() {
+
   if (_bellIntervalId) {
-    clearInterval(_bellIntervalId);
-    _bellIntervalId = null;
+
+    clearInterval(
+      _bellIntervalId
+    );
+
+    _bellIntervalId =
+      null;
+
   }
+
 }
 
 
@@ -549,21 +1149,28 @@ async function onAuthenticated() {
 
   mountAllModules();
 
-  // Initialisation du Cahier des charges
+
+  // Initialise le Cahier des charges
   initCahierDesCharges();
+
 
   const startPage =
     isPlatformAdmin()
       ? "superadmin"
       : "dashboard";
 
+
   showPage(startPage);
+
 
   startTrialWatch();
 
+
   await refreshBell();
 
+
   startBellWatch();
+
 }
 
 
@@ -579,18 +1186,17 @@ function onSignedOut() {
 
   resetReadCache();
 
-  // Le gate de connexion se réaffiche automatiquement
-  // via auth.js.
 }
 
 
 // ==========================================================================
-// ÉCRAN DE CONFIGURATION
+// ÉCRAN CONFIGURATION
 // ==========================================================================
 
 function showConfigScreen() {
 
   document.body.innerHTML = `
+
     <div
       style="
         min-height:100vh;
@@ -622,12 +1228,14 @@ function showConfigScreen() {
           Configuration requise
         </h1>
 
+
         <p
           style="
             color:#657089;
             margin-bottom:16px
           "
         >
+
           Ce fichier
           <code>js/config.js</code>
           est introuvable ou incomplet.
@@ -635,7 +1243,9 @@ function showConfigScreen() {
           Il contient l'URL et la clé
           <b>anon</b>
           publique de votre projet Supabase.
+
         </p>
+
 
         <ol
           style="
@@ -651,14 +1261,16 @@ function showConfigScreen() {
             <code>js/config.js</code>.
           </li>
 
+
           <li>
             Renseignez
             <code>SUPABASE_URL</code>
             et
             <code>SUPABASE_ANON_KEY</code>
-            depuis :
+            depuis
             Supabase → Project Settings → API.
           </li>
+
 
           <li>
             Exécutez
@@ -666,11 +1278,13 @@ function showConfigScreen() {
             dans l'éditeur SQL de votre projet Supabase.
           </li>
 
+
           <li>
             Rechargez cette page.
           </li>
 
         </ol>
+
 
         <p
           style="
@@ -684,7 +1298,9 @@ function showConfigScreen() {
         </p>
 
       </div>
+
     </div>
+
   `;
 }
 
@@ -698,16 +1314,24 @@ document.addEventListener(
   () => {
 
     if (!isConfigured()) {
+
       showConfigScreen();
+
       return;
     }
 
+
     bindChrome();
 
+
     setAuthCallbacks({
-      authenticated: onAuthenticated,
-      signedOut: onSignedOut
+      authenticated:
+        onAuthenticated,
+
+      signedOut:
+        onSignedOut
     });
+
 
     initAuth();
 
