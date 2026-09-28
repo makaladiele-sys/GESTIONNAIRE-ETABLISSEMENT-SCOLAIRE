@@ -90,6 +90,10 @@
       <button data-page="communication"><span class="ic">📣</span> Communication</button>
 
       <div class="nav-title">Système</div>
+<div class="nav-title">Documents</div>
+<button data-page="cahier">
+  <span class="ic">📋</span> Cahier des charges
+</button>
       <button data-page="users"><span class="ic">👥</span> Utilisateurs & Rôles</button>
       <button data-page="settings"><span class="ic">⚙️</span> Paramètres établissement</button>
       <button data-page="superadmin" id="navSuperAdmin" style="display:none"><span class="ic">🛡️</span> Super Admin</button>
@@ -472,7 +476,341 @@
           </div>
         </div>
       </div>
+<!-- ============================================================ CAHIER DES CHARGES -->
 
+<div class="page" id="cahier">
+
+  <div class="page-head">
+    <div>
+      <h2>Cahier des charges</h2>
+      <p>
+        Consultez le document de référence, prenez connaissance de ses
+        conditions et transmettez votre signature à Chift Digital.
+      </p>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-light" id="cahierDownloadBtn">
+        ⬇ Télécharger
+      </button>
+
+      <button class="btn btn-primary" id="cahierSignBtn">
+        ✍️ Signer le document
+      </button>
+    </div>
+  </div>
+
+
+  <!-- Informations du document -->
+
+  <div class="card" id="cahierDocumentCard">
+
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+    ">
+
+      <div>
+        <div class="label">DOCUMENT OFFICIEL</div>
+
+        <h3
+          id="cahierTitle"
+          style="margin:5px 0 8px"
+        >
+          Cahier des charges
+        </h3>
+
+        <div
+          id="cahierDescription"
+          style="color:var(--muted);line-height:1.6"
+        >
+          Chargement du document…
+        </div>
+      </div>
+
+      <div id="cahierStatus"></div>
+
+    </div>
+
+    <div
+      style="
+        margin-top:18px;
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:10px;
+      "
+    >
+
+      <div class="notice">
+        <b>Version</b><br>
+        <span id="cahierVersion">—</span>
+      </div>
+
+      <div class="notice">
+        <b>Publication</b><br>
+        <span id="cahierDate">—</span>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- Lecteur PDF -->
+
+  <div class="card" id="cahierViewerCard">
+
+    <div
+      style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+        margin-bottom:12px;
+      "
+    >
+
+      <div>
+        <h3 style="margin:0">
+          Lecture du cahier
+        </h3>
+
+        <small style="color:var(--muted)">
+          Prenez connaissance du document avant de le signer.
+        </small>
+      </div>
+
+    </div>
+
+    <div
+      id="cahierEmptyViewer"
+      class="empty"
+      style="padding:45px 20px"
+    >
+      Aucun document publié pour le moment.
+    </div>
+
+    <iframe
+      id="cahierPdfViewer"
+      title="Cahier des charges"
+      style="
+        display:none;
+        width:100%;
+        height:750px;
+        border:1px solid var(--border);
+        border-radius:12px;
+        background:#fff;
+      "
+    ></iframe>
+
+  </div>
+
+
+  <!-- Signature -->
+
+  <div
+    class="card"
+    id="cahierSignatureCard"
+    style="display:none"
+  >
+
+    <div class="page-head" style="margin-bottom:15px">
+
+      <div>
+        <h3>Signature de l'établissement</h3>
+
+        <p>
+          Le signataire confirme avoir lu et accepté le cahier des charges.
+        </p>
+      </div>
+
+    </div>
+
+
+    <div
+      style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+        gap:15px;
+      "
+    >
+
+      <div class="form-group">
+
+        <label for="cahierSignerName">
+          Nom et prénom du signataire *
+        </label>
+
+        <input
+          id="cahierSignerName"
+          class="form-control"
+          type="text"
+          placeholder="Ex. Jean Dupont"
+        >
+
+      </div>
+
+
+      <div class="form-group">
+
+        <label for="cahierSignerFunction">
+          Fonction *
+        </label>
+
+        <input
+          id="cahierSignerFunction"
+          class="form-control"
+          type="text"
+          placeholder="Ex. Directeur"
+        >
+
+      </div>
+
+    </div>
+
+
+    <div style="margin-top:15px">
+
+      <label>
+        Signature manuscrite *
+      </label>
+
+      <div
+        style="
+          position:relative;
+          margin-top:8px;
+          border:2px dashed var(--border);
+          border-radius:12px;
+          background:#fff;
+          overflow:hidden;
+        "
+      >
+
+        <canvas
+          id="cahierSignatureCanvas"
+          width="900"
+          height="300"
+          style="
+            display:block;
+            width:100%;
+            height:300px;
+            cursor:crosshair;
+            touch-action:none;
+          "
+        ></canvas>
+
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:10px;
+          margin-top:8px;
+        "
+      >
+
+        <small style="color:var(--muted)">
+          Dessinez votre signature avec la souris ou votre écran tactile.
+        </small>
+
+        <button
+          type="button"
+          class="btn btn-light"
+          id="cahierClearSignature"
+        >
+          Effacer
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <label
+      style="
+        display:flex;
+        gap:10px;
+        align-items:flex-start;
+        margin-top:18px;
+        cursor:pointer;
+      "
+    >
+
+      <input
+        type="checkbox"
+        id="cahierConsent"
+        style="margin-top:4px"
+      >
+
+      <span>
+        Je confirme avoir pris connaissance du cahier des charges et
+        certifie que les informations du signataire sont exactes.
+      </span>
+
+    </label>
+
+
+    <div
+      style="
+        display:flex;
+        justify-content:flex-end;
+        margin-top:20px;
+      "
+    >
+
+      <button
+        class="btn btn-primary"
+        id="cahierSubmitSignature"
+      >
+        ✍️ Signer et envoyer
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- Signature déjà envoyée -->
+
+  <div
+    class="card"
+    id="cahierSubmittedCard"
+    style="display:none"
+  >
+
+    <div style="display:flex;gap:14px;align-items:flex-start">
+
+      <div style="font-size:28px">
+        ✅
+      </div>
+
+      <div>
+
+        <h3 style="margin:0 0 6px">
+          Document transmis
+        </h3>
+
+        <p
+          id="cahierSubmittedMessage"
+          style="
+            margin:0;
+            color:var(--muted);
+            line-height:1.6;
+          "
+        ></p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
       <!-- ============================================================ SUPERADMIN -->
       <div class="page" id="superadmin">
         <div class="page-head">
